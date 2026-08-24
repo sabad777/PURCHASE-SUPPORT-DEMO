@@ -10,7 +10,7 @@
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2.1</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
@@ -25,7 +25,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="version-chip">Logic v2</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v2.1</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
 
     <div class="content">
@@ -59,7 +59,7 @@
 
         <div class="grid-2">
           <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
-          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2</div></div><div class="panel-body"><div class="insights">
+          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2.1</div></div><div class="panel-body"><div class="insights">
             <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
             <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
             <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock stays separate</strong><span>All Company Qty + On Way + On Way 2 are visible individually and used in projected cover.</span></div></div>
@@ -99,7 +99,7 @@
           <div class="setting-card"><h3>Reorder-soon cover</h3><input id="sReorder" type="number" step="0.1" min="0"><p>Projected cover below this triggers replenishment toward target.</p></div>
           <div class="setting-card"><h3>Overstock cover</h3><input id="sOverstock" type="number" step="0.1" min="0"><p>Current physical stock above this cover is flagged Overstock.</p></div>
           <div class="setting-card"><h3>Dormant inactivity</h3><input id="sDormant" type="number" step="1" min="1"><p>Months without a sale before stock is held for manual review.</p></div>
-          <div class="setting-card"><h3>Dead stock inactivity</h3><input id="sDead" type="number" step="1" min="1"><p>Months without a sale while stock remains before Dead Stock classification.</p></div>
+          <div class="setting-card"><h3>Dead stock inactivity</h3><input id="sDead" type="number" step="1" min="1"><p>Months of inactivity while stock remains. Never-sold items use Last Purchase Date when available, otherwise consecutive zero-sales months.</p></div>
           <div class="setting-card"><h3>Fast moving threshold</h3><input id="sFast" type="number" step="0.1" min="0"><p>Smart demand rate in pieces/month.</p></div>
           <div class="setting-card"><h3>Medium moving threshold</h3><input id="sMedium" type="number" step="0.1" min="0"><p>Below Fast and at/above this rate = Medium.</p></div>
           <div class="setting-card"><h3>One-time spike dominance</h3><input id="sSpike" type="number" step="5" min="50" max="100"><p>If one month contributes this percentage of sales with very few active months, automatic purchase is blocked for review.</p></div>

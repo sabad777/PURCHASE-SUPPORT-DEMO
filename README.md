@@ -1,4 +1,4 @@
-# TiBAO Purchase Intelligence — v2
+# TiBAO Purchase Intelligence — v2.1
 
 Browser-only proof-of-concept for the future Odoo Purchase Support module.
 
@@ -40,3 +40,7 @@ After committing the replacements, GitHub Pages normally republishes automatical
 ## Privacy
 
 Excel parsing and calculations run in the browser. This static prototype does not send the uploaded workbook to an application server.
+
+
+## v2.1 dead-stock fix
+Never-sold stock is now eligible for Dead Stock. If Last Sale Date is blank, the engine uses Last Purchase Date when available; if neither date exists, it uses the consecutive zero-sales months in the report. This prevents never-sold stock from being stuck in NO SALES / REVIEW forever.

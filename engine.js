@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v2.0 - calculation engine
+/* TiBAO Purchase Intelligence v2.1 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -193,6 +193,26 @@
     return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
   }
 
+  function consecutiveZeroSalesMonths(product, reportDate) {
+    const end = reportDate.getMonth();
+    let count = 0;
+    for (let m=end; m>=0; m--) {
+      if ((product.monthly[m] || 0) > 0) break;
+      count++;
+    }
+    return count;
+  }
+
+  function inferredLastSaleAgeMonths(product, reportDate) {
+    for (let m=reportDate.getMonth(); m>=0; m--) {
+      if ((product.monthly[m] || 0) > 0) {
+        const monthEnd = new Date(reportDate.getFullYear(), m + 1, 0);
+        return monthsBetween(monthEnd, reportDate);
+      }
+    }
+    return null;
+  }
+
   function salesProfile(product, settings, reportDate) {
     const elapsed = elapsedMonths(reportDate);
     const monthCount = reportDate.getMonth() + 1;
@@ -208,11 +228,30 @@
     const maxMonth = raw.length ? Math.max(...raw) : 0;
     const maxMonthIndex = raw.indexOf(maxMonth);
     const spikeSharePct = total > 0 ? (maxMonth / total) * 100 : 0;
-    const lastSaleAgeMonths = product.lastSaleDate ? monthsBetween(product.lastSaleDate, reportDate) : null;
+    const explicitLastSaleAgeMonths = product.lastSaleDate ? monthsBetween(product.lastSaleDate, reportDate) : null;
+    const inferredSaleAge = explicitLastSaleAgeMonths === null && total > 0 ? inferredLastSaleAgeMonths(product, reportDate) : null;
+    const lastSaleAgeMonths = explicitLastSaleAgeMonths !== null ? explicitLastSaleAgeMonths : inferredSaleAge;
+    const lastPurchaseAgeForInactivity = product.lastPurchaseDate ? monthsBetween(product.lastPurchaseDate, reportDate) : null;
+    const zeroSalesStreakMonths = consecutiveZeroSalesMonths(product, reportDate);
+
+    // Dead-stock logic must also work for items that have NEVER sold.
+    // If an item never sold, Last Sale Date is naturally blank, so we use the last purchase age when available.
+    // If neither sale nor purchase date exists, the consecutive zero-sales calendar months in the report are the fallback.
+    let inactivityAgeMonths = lastSaleAgeMonths;
+    let inactivityBasis = lastSaleAgeMonths !== null ? (product.lastSaleDate ? 'Last sale date' : 'Last non-zero sales month') : '';
+    if (total <= 0) {
+      if (lastPurchaseAgeForInactivity !== null) {
+        inactivityAgeMonths = lastPurchaseAgeForInactivity;
+        inactivityBasis = 'Last purchase date (never sold)';
+      } else {
+        inactivityAgeMonths = zeroSalesStreakMonths;
+        inactivityBasis = 'Consecutive zero-sales months';
+      }
+    }
 
     let pattern = 'NO SALES';
-    const isDead = product.allCompany > 0 && lastSaleAgeMonths !== null && lastSaleAgeMonths >= settings.deadStockMonths;
-    const isDormant = product.allCompany > 0 && !isDead && lastSaleAgeMonths !== null && lastSaleAgeMonths >= settings.dormantMonths;
+    const isDead = product.allCompany > 0 && inactivityAgeMonths !== null && inactivityAgeMonths >= settings.deadStockMonths;
+    const isDormant = product.allCompany > 0 && !isDead && inactivityAgeMonths !== null && inactivityAgeMonths >= settings.dormantMonths;
     const isSpike = total > 0 && activeMonths <= settings.spikeMaxActiveMonths && spikeSharePct >= settings.spikeDominancePct &&
       (lastSaleAgeMonths === null || lastSaleAgeMonths >= 1.5);
 
@@ -245,7 +284,8 @@
 
     return {
       elapsed, monthCount, total, overall, recent3, recent6, prior3, activeMonths, activePct,
-      maxMonth, maxMonthIndex, spikeSharePct, lastSaleAgeMonths, pattern, confidence,
+      maxMonth, maxMonthIndex, spikeSharePct, lastSaleAgeMonths, zeroSalesStreakMonths,
+      inactivityAgeMonths, inactivityBasis, pattern, confidence,
       demand: Math.max(0, demand), isDead, isDormant, isSpike
     };
   }
@@ -355,6 +395,8 @@
         `${sp.pattern} demand`, `${sp.activeMonths}/${sp.monthCount} sales months`, `smart demand ${formatNumber(demand,1)}/mo`,
         `stock ${formatNumber(p.allCompany,0)}`
       ];
+      if (sp.isDead || sp.isDormant || sp.total <= 0) reasonParts.push(`zero-sales streak ${sp.zeroSalesStreakMonths} month${sp.zeroSalesStreakMonths===1?'':'s'}`);
+      if ((sp.isDead || sp.isDormant) && sp.inactivityBasis) reasonParts.push(`inactivity based on ${sp.inactivityBasis.toLowerCase()}`);
       if (p.onWay) reasonParts.push(`On Way ${formatNumber(p.onWay,0)}`);
       if (p.onWay2) reasonParts.push(`On Way 2 ${formatNumber(p.onWay2,0)}`);
       if (p.totalPurchase) reasonParts.push(`purchased ${formatNumber(p.totalPurchase,0)} in report`);
