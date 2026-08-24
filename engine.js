@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v2.2 - calculation engine
+/* TiBAO Purchase Intelligence v2.3 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -6,10 +6,10 @@
   'use strict';
 
   const MONTH_KEYS = [
-    ['Jan Ext Sales', 'jan', 'Jan'], ['Feb Ext Sales', 'feb', 'Feb'], ['Mar Ext Sales', 'mar', 'Mar'],
-    ['Apr Ext Sales', 'apr', 'Apr'], ['May Ext Sales', 'may', 'May'], ['Jun Ext Sales', 'jun', 'Jun'],
-    ['Jul Ext Sales', 'jul', 'Jul'], ['Aug Ext Sales', 'aug', 'Aug'], ['Sep Ext Sales', 'sep', 'Sep'],
-    ['Oct Ext Sales', 'oct', 'Oct'], ['Nov Ext Sales', 'nov', 'Nov'], ['Dec Ext Sales', 'dec', 'Dec']
+    [['Jan Ext Sales','Jan'], 'jan', 'Jan'], [['Feb Ext Sales','Feb'], 'feb', 'Feb'], [['Mar Ext Sales','Mar'], 'mar', 'Mar'],
+    [['Apr Ext Sales','Apr'], 'apr', 'Apr'], [['May Ext Sales','May'], 'may', 'May'], [['Jun Ext Sales','Jun'], 'jun', 'Jun'],
+    [['Jul Ext Sales','Jul'], 'jul', 'Jul'], [['Aug Ext Sales','Aug'], 'aug', 'Aug'], [['Sep Ext Sales','Sep'], 'sep', 'Sep'],
+    [['Oct Ext Sales','Oct'], 'oct', 'Oct'], [['Nov Ext Sales','Nov'], 'nov', 'Nov'], [['Dec Ext Sales','Dec'], 'dec', 'Dec']
   ];
 
   const CONDITION_OPTIONS = [
@@ -40,30 +40,30 @@
 
   const HEADER_ALIASES = {
     productId: ['Odoo Product ID', 'Product ID'],
-    internalRef: ['Internal Reference', 'Item Code', 'Default Code'],
+    internalRef: ['Internal Reference', 'Internal Ref', 'Item Code', 'Default Code'],
     oem: ['Main OEM No Space', 'Main OEM', 'OEM', 'OEM No Space'],
     brand: ['Brand'],
     brandPartNo: ['Brand Part No.', 'Brand Part No', 'Brand Part Number'],
     description: ['Add Description', 'Description'],
     category: ['Product Category', 'Category'],
     make: ['Make', 'Vehicle Make', 'Car Make', 'Vehicle Brand', 'Car Brand', 'Vehicle Manufacturer'],
-    motorlineStock: ['Motorline Stock'],
-    bavariaStock: ['Bavaria Stock'],
-    tibaoStock: ['Tibao SHJ Stock', 'Tibao Stock'],
-    allCompany: ['All Company Qty (Core)', 'All Company Qty', 'All Company Quantity'],
-    tibaoADRef: ['Tibao AD Stock (Ref)', 'Tibao AD Stock'],
-    tibaoDXBRef: ['Tibao DXB Stock (Ref)', 'Tibao DXB Stock'],
-    totalSales: ['Total External Sales Qty', 'Total External Sales', 'Sales Qty'],
-    salesCount: ['External Sales Invoice Count', 'Sales Invoice Count', 'Sales Count'],
-    lastSaleDate: ['Last External Sale Date', 'Last Sale Date'],
-    totalPurchase: ['Total External Purchase Qty', 'Total Purchase Qty', 'Purchase Qty'],
-    purchaseCount: ['External Purchase Count', 'Purchase Count'],
-    lastPurchaseDate: ['Last External Purchase Date', 'Last Purchase Date'],
-    motorlineOnWay: ['Motorline On Way'],
+    motorlineStock: ['Motorline Stock', 'Motorline'],
+    bavariaStock: ['Bavaria Stock', 'Bavaria'],
+    tibaoStock: ['Tibao SHJ Stock', 'Tibao Stock', 'Tibao SHJ'],
+    allCompany: ['All Company Qty (Core)', 'All Company Qty', 'All Company Quantity', 'All Company (Core)'],
+    tibaoADRef: ['Tibao AD Stock (Ref)', 'Tibao AD Stock', 'Tibao AD *'],
+    tibaoDXBRef: ['Tibao DXB Stock (Ref)', 'Tibao DXB Stock', 'Tibao DXB *'],
+    totalSales: ['Total External Sales Qty', 'Total External Sales', 'Sales Qty', 'Total Qty'],
+    salesCount: ['External Sales Invoice Count', 'Sales Invoice Count', 'Sales Count', 'Invoices'],
+    lastSaleDate: ['Last External Sale Date', 'Last Sale Date', 'Last Sale'],
+    totalPurchase: ['Total External Purchase Qty', 'Total Purchase Qty', 'Purchase Qty', 'Received Qty'],
+    purchaseCount: ['External Purchase Count', 'Purchase Count', 'Receipts'],
+    lastPurchaseDate: ['Last External Purchase Date', 'Last Purchase Date', 'Last Purchase'],
+    motorlineOnWay: ['Motorline On Way', 'ML On Way'],
     bavariaOnWay: ['Bavaria On Way'],
     tibaoOnWay: ['Tibao On Way', 'Tibao SHJ On Way'],
     groupOnWay: ['Group On Way', 'All Company On Way', 'Total On Way'],
-    motorlineOnWay2: ['Motorline On Way 2'],
+    motorlineOnWay2: ['Motorline On Way 2', 'ML On Way 2'],
     bavariaOnWay2: ['Bavaria On Way 2'],
     tibaoOnWay2: ['Tibao On Way 2', 'Tibao SHJ On Way 2'],
     groupOnWay2: ['Group On Way 2', 'All Company On Way 2', 'Total On Way 2'],
@@ -81,27 +81,46 @@
   function normalizeKey(v) { return text(v).toLowerCase().replace(/[\s._()\-\/]+/g, ''); }
   function normalizeOEM(v) { return text(v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
-  const MAKE_PREFIXES = [
-    [/^(?:VW|VOLKSWAGEN)\b/i, 'VW'],
-    [/^(?:AUDI)\b/i, 'AUDI'],
-    [/^(?:BENZ|MERC|MERCEDES(?:[- ]BENZ)?)\b/i, 'BENZ'],
-    [/^(?:BMW)\b/i, 'BMW'],
-    [/^(?:POR|PORSCHE)\b/i, 'PORSCHE'],
-    [/^(?:LR|LAND\s*ROVER|LANDROVER)\b/i, 'LAND ROVER'],
-    [/^(?:JAG|JAGUAR)\b/i, 'JAGUAR'],
-    [/^(?:SKODA)\b/i, 'SKODA'],
-    [/^(?:SEAT|CUPRA)\b/i, 'SEAT/CUPRA'],
-    [/^(?:MINI)\b/i, 'MINI'],
-    [/^(?:VOLVO)\b/i, 'VOLVO'],
-    [/^(?:TOYOTA)\b/i, 'TOYOTA'],
-    [/^(?:SUBARU)\b/i, 'SUBARU'],
-    [/^(?:FORD)\b/i, 'FORD']
-  ];
+  // Vehicle make mapping from the confirmed old/internal-reference prefixes used by the business.
+  // Exact token matching prevents BE (Bentley) from ever being confused with BENZ (Mercedes-Benz).
+  const MAKE_CODE_MAP = {
+    'VW':'VW','WV':'VW','VOLKSWAGEN':'VW',
+    'BENZ':'BENZ','MERC':'BENZ','MERCEDES':'BENZ','MERCEDES BENZ':'BENZ',
+    'BMW':'BMW',
+    'ROV':'LAND ROVER','LR':'LAND ROVER','LAND ROVER':'LAND ROVER','LANDROVER':'LAND ROVER',
+    'TY':'TOYOTA','TOYOTA':'TOYOTA',
+    'BE':'BENTLEY','BENTLEY':'BENTLEY',
+    'P':'PORSCHE','PO':'PORSCHE','POR':'PORSCHE','PORSCHE':'PORSCHE',
+    'SKD':'SKODA','SKODA':'SKODA',
+    'AD':'AUDI','AU':'AUDI','AUDI':'AUDI',
+    'UN':'UNIVERSAL','UNIVERSAL':'UNIVERSAL',
+    'HY':'HYUNDAI','HYUNDAI':'HYUNDAI',
+    'JE':'JEEP','JEEP':'JEEP',
+    'JA':'JAGUAR','JAG':'JAGUAR','JAGUAR':'JAGUAR',
+    'HO':'HONDA','HONDA':'HONDA',
+    'OP':'OPEL','OPEL':'OPEL',
+    'SK':'SKODA',
+    'MZ':'MAZDA','MAZDA':'MAZDA',
+    'MI':'MITSUBISHI','MITSUBISHI':'MITSUBISHI',
+    'MAS':'MASERATI','MASERATI':'MASERATI',
+    'SEAT':'SEAT/CUPRA','CUPRA':'SEAT/CUPRA',
+    'MINI':'MINI','VOLVO':'VOLVO','SUBARU':'SUBARU','FORD':'FORD'
+  };
+  function canonicalMake(v) {
+    const raw = text(v).toUpperCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+    return MAKE_CODE_MAP[raw] || '';
+  }
   function deriveMake(explicitMake, internalRef) {
-    const direct = text(explicitMake);
-    if (direct) return direct.toUpperCase();
-    const ref = text(internalRef).replace(/[_-]+/g, ' ').trim();
-    for (const [rx, label] of MAKE_PREFIXES) if (rx.test(ref)) return label;
+    const directRaw = text(explicitMake);
+    if (directRaw) return canonicalMake(directRaw) || directRaw.toUpperCase();
+    const ref = text(internalRef).toUpperCase().trim();
+    if (!ref) return 'UNKNOWN';
+    const firstToken = ref.split(/\s+/)[0].replace(/^[-_]+|[-_]+$/g,'');
+    if (MAKE_CODE_MAP[firstToken]) return MAKE_CODE_MAP[firstToken];
+    // Small fallback for legacy references where VW/BENZ/BMW were attached directly to the number.
+    if (/^VW(?=\d)/.test(firstToken)) return 'VW';
+    if (/^BENZ(?=\d)/.test(firstToken)) return 'BENZ';
+    if (/^BMW(?=\d)/.test(firstToken)) return 'BMW';
     return 'UNKNOWN';
   }
 
@@ -127,16 +146,18 @@
       const aliasKeys = aliases.map(normalizeKey);
       map[field] = normalized.findIndex(x => aliasKeys.includes(x));
     });
-    MONTH_KEYS.forEach(([header, key]) => { map[key] = normalized.findIndex(x => x === normalizeKey(header)); });
+    MONTH_KEYS.forEach(([headers, key]) => {
+      const aliasKeys = (Array.isArray(headers) ? headers : [headers]).map(normalizeKey);
+      map[key] = normalized.findIndex(x => aliasKeys.includes(x));
+    });
     return map;
   }
 
   function findHeaderRow(matrix) {
     const max = Math.min(matrix.length, 15);
     for (let i = 0; i < max; i++) {
-      const row = (matrix[i] || []).map(normalizeKey);
-      if (row.includes(normalizeKey('Internal Reference')) &&
-          (row.includes(normalizeKey('Odoo Product ID')) || row.includes(normalizeKey('Main OEM No Space')))) return i;
+      const candidate = headerIndex(matrix[i] || []);
+      if (candidate.internalRef >= 0 && (candidate.productId >= 0 || candidate.oem >= 0)) return i;
     }
     return 0;
   }
@@ -163,6 +184,10 @@
   }
   function valueAt(row, idx) { return idx >= 0 ? row[idx] : ''; }
   function resolveQty(row, map, groupField, componentFields) {
+    // Prefer the three company-level fields when all are present. This makes the engine
+    // resilient even if a Group On Way total is accidentally wrong in a future export.
+    const allComponentsPresent = componentFields.every(f => map[f] >= 0);
+    if (allComponentsPresent) return componentFields.reduce((sum, f) => sum + n(valueAt(row, map[f])), 0);
     const groupIdx = map[groupField];
     if (groupIdx >= 0) return n(valueAt(row, groupIdx));
     return componentFields.reduce((sum, f) => sum + n(valueAt(row, map[f])), 0);
@@ -179,8 +204,12 @@
     const tibaoStock = n(valueAt(row, map.tibaoStock));
     const explicitAll = n(valueAt(row, map.allCompany));
     const allCompany = map.allCompany >= 0 ? explicitAll : (motorlineStock + bavariaStock + tibaoStock);
-    const onWay = resolveQty(row, map, 'groupOnWay', ['motorlineOnWay', 'bavariaOnWay', 'tibaoOnWay']);
-    const onWay2 = resolveQty(row, map, 'groupOnWay2', ['motorlineOnWay2', 'bavariaOnWay2', 'tibaoOnWay2']);
+    const rawOnWay = resolveQty(row, map, 'groupOnWay', ['motorlineOnWay', 'bavariaOnWay', 'tibaoOnWay']);
+    const rawOnWay2 = resolveQty(row, map, 'groupOnWay2', ['motorlineOnWay2', 'bavariaOnWay2', 'tibaoOnWay2']);
+    // Incoming shipment quantities should never be negative. Keep the raw value for Data Quality,
+    // but never let a negative export value artificially increase a purchase recommendation.
+    const onWay = Math.max(0, rawOnWay);
+    const onWay2 = Math.max(0, rawOnWay2);
     const internalRef = text(valueAt(row, map.internalRef));
     const oemRaw = text(valueAt(row, map.oem));
     const brand = text(valueAt(row, map.brand)) || 'Unbranded';
@@ -196,8 +225,8 @@
       tibaoADRef: n(valueAt(row, map.tibaoADRef)), tibaoDXBRef: n(valueAt(row, map.tibaoDXBRef)),
       monthly, totalSales, salesCount: n(valueAt(row, map.salesCount)), lastSaleDate: parseDate(valueAt(row, map.lastSaleDate)),
       totalPurchase: n(valueAt(row, map.totalPurchase)), purchaseCount: n(valueAt(row, map.purchaseCount)), lastPurchaseDate: parseDate(valueAt(row, map.lastPurchaseDate)),
-      motorlineOnWay: n(valueAt(row, map.motorlineOnWay)), bavariaOnWay: n(valueAt(row, map.bavariaOnWay)), tibaoOnWay: n(valueAt(row, map.tibaoOnWay)), onWay,
-      motorlineOnWay2: n(valueAt(row, map.motorlineOnWay2)), bavariaOnWay2: n(valueAt(row, map.bavariaOnWay2)), tibaoOnWay2: n(valueAt(row, map.tibaoOnWay2)), onWay2,
+      motorlineOnWay: n(valueAt(row, map.motorlineOnWay)), bavariaOnWay: n(valueAt(row, map.bavariaOnWay)), tibaoOnWay: n(valueAt(row, map.tibaoOnWay)), rawOnWay, onWay,
+      motorlineOnWay2: n(valueAt(row, map.motorlineOnWay2)), bavariaOnWay2: n(valueAt(row, map.bavariaOnWay2)), tibaoOnWay2: n(valueAt(row, map.tibaoOnWay2)), rawOnWay2, onWay2,
       reportDate
     };
   }
@@ -461,12 +490,15 @@
       brand:products.filter(p=>!p.brand||p.brand==='Unbranded').length,
       description:products.filter(p=>!p.description).length,
       internalRef:products.filter(p=>!p.internalRef).length,
-      lastSaleDate:products.filter(p=>p.totalSales>0&&!p.lastSaleDate).length
+      lastSaleDate:products.filter(p=>p.totalSales>0&&!p.lastSaleDate).length,
+      negativeIncoming:products.filter(p=>p.rawOnWay<0||p.rawOnWay2<0||p.motorlineOnWay<0||p.bavariaOnWay<0||p.tibaoOnWay<0||p.motorlineOnWay2<0||p.bavariaOnWay2<0||p.tibaoOnWay2<0).length
     };
     const columns={
-      bavariaOnWay:map.bavariaOnWay>=0,tibaoOnWay:map.tibaoOnWay>=0,reportDate:map.reportDate>=0,
-      groupOnWay:map.groupOnWay>=0,groupOnWay2:map.groupOnWay2>=0,
-      totalPurchase:map.totalPurchase>=0,purchaseCount:map.purchaseCount>=0,lastPurchaseDate:map.lastPurchaseDate>=0
+      make:map.make>=0,
+      motorlineOnWay:map.motorlineOnWay>=0,bavariaOnWay:map.bavariaOnWay>=0,tibaoOnWay:map.tibaoOnWay>=0,groupOnWay:map.groupOnWay>=0,
+      motorlineOnWay2:map.motorlineOnWay2>=0,bavariaOnWay2:map.bavariaOnWay2>=0,tibaoOnWay2:map.tibaoOnWay2>=0,groupOnWay2:map.groupOnWay2>=0,
+      reportDate:map.reportDate>=0,totalPurchase:map.totalPurchase>=0,purchaseCount:map.purchaseCount>=0,lastPurchaseDate:map.lastPurchaseDate>=0,
+      monthlySales:map.jan>=0&&map.aug>=0
     };
     return {missing,columns};
   }

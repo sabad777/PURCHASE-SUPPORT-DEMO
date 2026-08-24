@@ -75,7 +75,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.2`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.3`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -215,8 +215,14 @@ function selectBrand(brand){state.selectedBrands.clear();state.selectedBrands.ad
 function renderQuality(){
  if(!state.products.length){$('qualityGrid').innerHTML='<div class="empty">Upload data first.</div>';$('columnChecks').innerHTML='';return;}
  const q=E.dataQuality(state.products,state.map||{}),total=state.products.length;
- $('qualityGrid').innerHTML=`<div class="quality-card"><strong>${fmt(total)}</strong><span>Total product rows</span></div><div class="quality-card"><strong>${fmt(q.missing.oem)}</strong><span>Missing OEM (${((q.missing.oem/Math.max(1,total))*100).toFixed(1)}%)</span></div><div class="quality-card"><strong>${fmt(q.missing.brand)}</strong><span>Missing brand</span></div><div class="quality-card"><strong>${fmt(q.missing.lastSaleDate)}</strong><span>Sales rows missing Last Sale Date</span></div>`;
- const checks=[['Odoo Make field (otherwise derived from Internal Ref)',q.columns.make],['Bavaria On Way',q.columns.bavariaOnWay],['Tibao SHJ On Way',q.columns.tibaoOnWay],['Report Till Date column',q.columns.reportDate],['Group On Way fallback',q.columns.groupOnWay],['Group On Way 2',q.columns.groupOnWay2],['Total Purchase Qty',q.columns.totalPurchase],['Purchase Count',q.columns.purchaseCount],['Last Purchase Date',q.columns.lastPurchaseDate]];
+ $('qualityGrid').innerHTML=`<div class="quality-card"><strong>${fmt(total)}</strong><span>Total product rows</span></div><div class="quality-card"><strong>${fmt(q.missing.oem)}</strong><span>Missing OEM (${((q.missing.oem/Math.max(1,total))*100).toFixed(1)}%)</span></div><div class="quality-card"><strong>${fmt(q.missing.brand)}</strong><span>Missing brand</span></div><div class="quality-card"><strong>${fmt(q.missing.lastSaleDate)}</strong><span>Sales rows missing Last Sale Date</span></div><div class="quality-card"><strong>${fmt(q.missing.negativeIncoming)}</strong><span>Negative incoming rows (calculation protected)</span></div>`;
+ const checks=[
+  ['Odoo Make field (otherwise derived from Internal Ref)',q.columns.make],
+  ['Motorline On Way',q.columns.motorlineOnWay],['Tibao On Way',q.columns.tibaoOnWay],['Bavaria On Way',q.columns.bavariaOnWay],['Group On Way',q.columns.groupOnWay],
+  ['Motorline On Way 2',q.columns.motorlineOnWay2],['Tibao On Way 2',q.columns.tibaoOnWay2],['Bavaria On Way 2',q.columns.bavariaOnWay2],['Group On Way 2',q.columns.groupOnWay2],
+  ['Monthly sales Jan-Aug',q.columns.monthlySales],['Report Till Date column (title fallback supported)',q.columns.reportDate],
+  ['Purchase Qty / Received Qty',q.columns.totalPurchase],['Purchase Count / Receipts',q.columns.purchaseCount],['Last Purchase Date',q.columns.lastPurchaseDate]
+ ];
  $('columnChecks').innerHTML=checks.map(([l,ok])=>`<div class="check-item"><span>${esc(l)}</span><span class="${ok?'yes':'no'}">${ok?'✓ Available':'○ Missing / fallback'}</span></div>`).join('');
 }
 
@@ -291,7 +297,7 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_2_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportRows(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Suggestions_v2_2_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_3_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportRows(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Suggestions_v2_3_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings={...E.DEFAULT_SETTINGS};saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
 
