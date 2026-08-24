@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TiBAO Purchase Intelligence</title>
-  <meta name="description" content="Browser-based purchase support prototype for Odoo Excel exports.">
+  <meta name="description" content="Browser-based purchase intelligence prototype for Odoo Excel exports.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Odoo concept prototype</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
@@ -19,89 +19,96 @@
       <button data-view="settings"><span class="icon">⚙</span><span class="label">Settings</span></button>
     </nav>
     <div class="side-spacer"></div>
-    <div class="privacy-card"><strong>● Local processing</strong>Your Excel is read in this browser. This prototype does not send the file to a server.</div>
+    <div class="privacy-card"><strong>● Local processing</strong>Your Excel is analysed inside this browser. The app does not upload the workbook to a server.</div>
   </aside>
+
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v2</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
+
     <div class="content">
       <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm" hidden>
 
       <section class="view active" id="view-dashboard">
         <div class="upload-zone" id="uploadZone">
           <div class="upload-icon">📊</div><h2>Upload your Odoo Purchase Support export</h2>
-          <p>Drag and drop an Excel file here. Same-OEM matching is automatic across different brands.</p>
+          <p>Monthly sales, purchase history, stock, On Way, On Way 2 and exact same-OEM other-brand availability are analysed locally.</p>
           <div class="upload-actions"><button class="btn primary" id="uploadBtn">Choose Excel File</button><button class="btn" id="demoBtn">Load Demo Data</button></div>
         </div>
 
         <div class="filters">
-          <div class="field"><label>Search</label><input id="search" placeholder="OEM, part number, description..." autocomplete="off"></div>
+          <div class="field search-field"><label>Search</label><input id="search" placeholder="OEM, part number, description..." autocomplete="off"></div>
           <div class="field"><label>Brand</label><select id="brandFilter"><option value="">All Brands</option></select></div>
           <div class="field"><label>Condition</label><select id="conditionFilter"><option value="">All Conditions</option></select></div>
           <div class="field"><label>Movement</label><select id="movementFilter"><option value="">All Movement</option></select></div>
+          <div class="field"><label>Demand Pattern</label><select id="patternFilter"><option value="">All Patterns</option></select></div>
           <div class="field"><label>Category</label><select id="categoryFilter"><option value="">All Categories</option></select></div>
           <div class="field"><label>&nbsp;</label><button class="btn" id="clearFilters">Clear</button></div>
         </div>
 
         <div class="kpis">
-          <div class="kpi red" data-condition="CRITICAL ORDER"><div class="label">Critical Low Stock</div><div class="value" id="kpiCritical">0</div><div class="hint">Needs immediate review</div></div>
+          <div class="kpi red" data-condition="CRITICAL ORDER"><div class="label">Critical Low Stock</div><div class="value" id="kpiCritical">0</div><div class="hint">Order now</div></div>
           <div class="kpi amber" data-condition="REORDER SOON"><div class="label">Reorder Soon</div><div class="value" id="kpiReorder">0</div><div class="hint">Add to next purchase</div></div>
-          <div class="kpi blue" data-condition="WAIT INCOMING"><div class="label">Wait Incoming</div><div class="value" id="kpiWait">0</div><div class="hint">On Way / On Way 2 considered</div></div>
+          <div class="kpi blue" data-condition="WAIT INCOMING"><div class="label">Wait Incoming</div><div class="value" id="kpiWait">0</div><div class="hint">On Way / On Way 2 covers trigger</div></div>
           <div class="kpi green" data-movement="FAST MOVING"><div class="label">Fast Moving</div><div class="value" id="kpiFast">0</div><div class="hint">High demand items</div></div>
-          <div class="kpi gray" data-condition="DEAD STOCK"><div class="label">Dead Stock</div><div class="value" id="kpiDead">0</div><div class="hint">Stock with long inactivity</div></div>
+          <div class="kpi gray" data-condition="DEAD STOCK"><div class="label">Dead Stock</div><div class="value" id="kpiDead">0</div><div class="hint">Stock inactive beyond threshold</div></div>
           <div class="kpi purple"><div class="label">Suggested Purchase Qty</div><div class="value" id="kpiSuggested">0</div><div class="hint">Current filtered view</div></div>
         </div>
 
         <div class="grid-2">
-          <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with the filters above</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
-          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence</div></div><div class="panel-body"><div class="insights">
-            <div class="insight"><div class="dot">↗</div><div><strong>Sales-based demand</strong><span>Uses elapsed report months and recent sales instead of fixed min/max only.</span></div></div>
-            <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock is separated</strong><span>All Company Qty, On Way and On Way 2 remain visible and are calculated independently.</span></div></div>
-            <div class="insight"><div class="dot">⇄</div><div><strong>Same OEM, different brand</strong><span>Automatically finds matching OEM numbers and shows stock/incoming in the other brands.</span></div></div>
-            <div class="insight"><div class="dot">i</div><div><strong>Explain every suggestion</strong><span>Click any product to see why the module recommends ordering, waiting or stopping purchase.</span></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
+          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2</div></div><div class="panel-body"><div class="insights">
+            <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
+            <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
+            <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock stays separate</strong><span>All Company Qty + On Way + On Way 2 are visible individually and used in projected cover.</span></div></div>
+            <div class="insight"><div class="dot">⇄</div><div><strong>Exact OEM cross-brand check</strong><span>Shows matching OEM stock/incoming in other brands. Management controls how much, if any, reduces purchase suggestion.</span></div></div>
           </div></div></div>
         </div>
 
-        <div class="panel"><div class="panel-head"><div><div class="panel-title">Priority Purchase Suggestions</div><div class="panel-note">Top items from the current filter</div></div><button class="btn" data-go="planner">Open Full Planner</button></div><div class="table-wrap"><table class="data-table" id="dashboardTable"></table></div></div>
+        <div class="panel"><div class="panel-head"><div><div class="panel-title">Priority Purchase Suggestions</div><div class="panel-note">Click a part number to see the complete calculation and monthly history</div></div><button class="btn" data-go="planner">Open Full Planner</button></div><div class="table-wrap"><table class="data-table" id="dashboardTable"></table></div></div>
       </section>
 
       <section class="view" id="view-planner">
         <div class="panel">
           <div class="table-toolbar"><div class="toolbar-left"><span class="results" id="plannerResults">0 items</span><button class="btn" id="exportFiltered">Export Filtered</button><button class="btn primary" id="exportSelected" disabled>Export Selected (0)</button></div><div class="toolbar-right"><label class="results">Rows</label><select id="pageSize" class="btn"><option>25</option><option selected>50</option><option>100</option><option>250</option></select></div></div>
-          <div class="table-wrap"><table class="data-table" id="plannerTable"></table></div>
+          <div class="table-wrap"><table class="data-table planner-wide" id="plannerTable"></table></div>
           <div class="pager"><span class="results" id="pageInfo"></span><div><button class="btn" id="prevPage">Previous</button> <button class="btn" id="nextPage">Next</button></div></div>
         </div>
       </section>
 
       <section class="view" id="view-brands">
-        <div class="panel-head" style="padding-left:0;border:0"><div><div class="panel-title" style="font-size:18px">Brand Analysis</div><div class="panel-note">Click a brand to filter the entire dashboard</div></div></div>
+        <div class="panel-head flush"><div><div class="panel-title section-title">Brand Analysis</div><div class="panel-note">Click a brand and the dashboard becomes brand-specific</div></div></div>
         <div class="brand-grid" id="brandGrid"></div>
         <div class="panel"><div class="panel-head"><div class="panel-title">All Brand Summary</div></div><div class="table-wrap"><table class="data-table" id="brandTable"></table></div></div>
       </section>
 
       <section class="view" id="view-quality">
-        <div class="panel-head" style="padding-left:0;border:0"><div><div class="panel-title" style="font-size:18px">Data Quality Check</div><div class="panel-note">Useful before management approves the purchase calculations</div></div></div>
+        <div class="panel-head flush"><div><div class="panel-title section-title">Data Quality Check</div><div class="panel-note">Confirm the Odoo export is complete before management validates purchasing logic</div></div></div>
         <div class="quality-grid" id="qualityGrid"></div>
-        <div class="panel"><div class="panel-head"><div><div class="panel-title">Expected Odoo Fields</div><div class="panel-note">The module is flexible and can fall back to Group On Way when branch columns are missing.</div></div></div><div class="panel-body"><div class="check-list" id="columnChecks"></div></div></div>
+        <div class="panel"><div class="panel-head"><div><div class="panel-title">Expected Odoo Fields</div><div class="panel-note">Group On Way is supported as a fallback while branch-specific On Way fields are being added.</div></div></div><div class="panel-body"><div class="check-list" id="columnChecks"></div></div></div>
       </section>
 
       <section class="view" id="view-settings">
-        <div class="settings-warning"><strong>Prototype rule settings.</strong> These are deliberately editable so Purchasing + Management can validate them before anything is hard-coded in Odoo.</div>
+        <div class="settings-warning"><strong>Management validation settings.</strong> Nothing here is hard-coded permanently. Change a rule, press Apply Settings, and compare the recommendations with experienced purchasing decisions.</div>
         <div class="settings-grid">
-          <div class="setting-card"><h3>Target stock cover</h3><input id="sTarget" type="number" step="0.1" min="0"><p>Normal months of demand to hold after purchasing.</p></div>
-          <div class="setting-card"><h3>Safety stock</h3><input id="sSafety" type="number" step="0.1" min="0"><p>Extra months added to the target as a buffer.</p></div>
-          <div class="setting-card"><h3>Critical cover</h3><input id="sCritical" type="number" step="0.1" min="0"><p>Below this projected cover, item becomes Critical.</p></div>
-          <div class="setting-card"><h3>Reorder-soon cover</h3><input id="sReorder" type="number" step="0.1" min="0"><p>Below this projected cover, item becomes Reorder Soon.</p></div>
-          <div class="setting-card"><h3>Overstock cover</h3><input id="sOverstock" type="number" step="0.1" min="0"><p>Current stock above this cover is flagged Overstock.</p></div>
-          <div class="setting-card"><h3>Dead stock inactivity</h3><input id="sDead" type="number" step="1" min="1"><p>Months since last sale, with stock remaining and no sales in the report period.</p></div>
-          <div class="setting-card"><h3>Fast moving threshold</h3><input id="sFast" type="number" step="0.1" min="0"><p>Demand rate in pieces/month.</p></div>
+          <div class="setting-card"><h3>Target stock cover</h3><input id="sTarget" type="number" step="0.1" min="0"><p>Months of demand to reach when a reorder is triggered.</p></div>
+          <div class="setting-card"><h3>Safety stock</h3><input id="sSafety" type="number" step="0.1" min="0"><p>Extra buffer months added to the target.</p></div>
+          <div class="setting-card"><h3>Critical cover</h3><input id="sCritical" type="number" step="0.1" min="0"><p>Projected cover below this becomes Critical Order.</p></div>
+          <div class="setting-card"><h3>Reorder-soon cover</h3><input id="sReorder" type="number" step="0.1" min="0"><p>Projected cover below this triggers replenishment toward target.</p></div>
+          <div class="setting-card"><h3>Overstock cover</h3><input id="sOverstock" type="number" step="0.1" min="0"><p>Current physical stock above this cover is flagged Overstock.</p></div>
+          <div class="setting-card"><h3>Dormant inactivity</h3><input id="sDormant" type="number" step="1" min="1"><p>Months without a sale before stock is held for manual review.</p></div>
+          <div class="setting-card"><h3>Dead stock inactivity</h3><input id="sDead" type="number" step="1" min="1"><p>Months without a sale while stock remains before Dead Stock classification.</p></div>
+          <div class="setting-card"><h3>Fast moving threshold</h3><input id="sFast" type="number" step="0.1" min="0"><p>Smart demand rate in pieces/month.</p></div>
           <div class="setting-card"><h3>Medium moving threshold</h3><input id="sMedium" type="number" step="0.1" min="0"><p>Below Fast and at/above this rate = Medium.</p></div>
-          <div class="setting-card"><h3>Other-brand stock credit</h3><input id="sEquivalent" type="number" step="5" min="0" max="100"><p>Percentage of same-OEM other-brand stock/incoming deducted from purchase suggestion. Default is 0% until management approves the rule.</p></div>
-          <div class="setting-card"><h3>Demand calculation</h3><select id="sDemand"><option value="weighted">40% overall + 60% recent 3 months</option><option value="overall">Overall average only</option><option value="max">Higher of overall / recent</option></select><p>Change this and compare recommendations with an experienced purchaser.</p></div>
+          <div class="setting-card"><h3>One-time spike dominance</h3><input id="sSpike" type="number" step="5" min="50" max="100"><p>If one month contributes this percentage of sales with very few active months, automatic purchase is blocked for review.</p></div>
+          <div class="setting-card"><h3>Regular-demand active months</h3><input id="sRegular" type="number" step="5" min="20" max="100"><p>Percentage of elapsed months that should contain sales before demand is treated as regular.</p></div>
+          <div class="setting-card"><h3>Other-brand stock credit</h3><input id="sEquivalent" type="number" step="5" min="0" max="100"><p>Percentage of exact-same-OEM other-brand stock/incoming deducted. Default 0% until management approves.</p></div>
+          <div class="setting-card"><h3>Demand calculation</h3><select id="sDemand"><option value="smart">Smart pattern-based demand (recommended)</option><option value="overall">Overall average only</option><option value="recent">Recent 3-month average only</option><option value="max">Higher of overall / recent</option></select><p>Smart mode protects against old sales spikes and reacts to current trends.</p></div>
+          <div class="setting-card"><h3>Suggestion mode</h3><select id="sSuggestionMode"><option value="proactive">Proactive — top up whenever below target</option><option value="trigger">Min/Max — only order below reorder cover</option></select><p>Proactive mode matches the management-planning use case. Min/Max behaves more like a traditional replenishment trigger.</p></div>
         </div>
-        <div style="margin-top:15px"><button class="btn primary" id="applySettings">Apply Settings</button> <button class="btn" id="resetSettings">Reset Defaults</button></div>
+        <div class="settings-actions"><button class="btn primary" id="applySettings">Apply Settings</button> <button class="btn" id="resetSettings">Reset Defaults</button></div>
       </section>
     </div>
   </main>
@@ -110,7 +117,6 @@
 <div class="modal-backdrop hidden" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><strong id="modalTitle">Product analysis</strong><div class="panel-note" id="modalSub"></div></div><button class="close" id="modalClose">×</button></div><div class="modal-body" id="modalBody"></div></div></div>
 <div class="toast hidden" id="toast"></div>
 
-<!-- SheetJS parses and creates XLSX files in the browser. No backend is used. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="engine.js"></script>
 <script src="app.js"></script>
