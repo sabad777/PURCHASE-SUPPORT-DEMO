@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v2.1 - calculation engine
+/* TiBAO Purchase Intelligence v2.2 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -46,6 +46,7 @@
     brandPartNo: ['Brand Part No.', 'Brand Part No', 'Brand Part Number'],
     description: ['Add Description', 'Description'],
     category: ['Product Category', 'Category'],
+    make: ['Make', 'Vehicle Make', 'Car Make', 'Vehicle Brand', 'Car Brand', 'Vehicle Manufacturer'],
     motorlineStock: ['Motorline Stock'],
     bavariaStock: ['Bavaria Stock'],
     tibaoStock: ['Tibao SHJ Stock', 'Tibao Stock'],
@@ -79,6 +80,30 @@
   function text(v) { return v === null || v === undefined ? '' : String(v).trim(); }
   function normalizeKey(v) { return text(v).toLowerCase().replace(/[\s._()\-\/]+/g, ''); }
   function normalizeOEM(v) { return text(v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  const MAKE_PREFIXES = [
+    [/^(?:VW|VOLKSWAGEN)\b/i, 'VW'],
+    [/^(?:AUDI)\b/i, 'AUDI'],
+    [/^(?:BENZ|MERC|MERCEDES(?:[- ]BENZ)?)\b/i, 'BENZ'],
+    [/^(?:BMW)\b/i, 'BMW'],
+    [/^(?:POR|PORSCHE)\b/i, 'PORSCHE'],
+    [/^(?:LR|LAND\s*ROVER|LANDROVER)\b/i, 'LAND ROVER'],
+    [/^(?:JAG|JAGUAR)\b/i, 'JAGUAR'],
+    [/^(?:SKODA)\b/i, 'SKODA'],
+    [/^(?:SEAT|CUPRA)\b/i, 'SEAT/CUPRA'],
+    [/^(?:MINI)\b/i, 'MINI'],
+    [/^(?:VOLVO)\b/i, 'VOLVO'],
+    [/^(?:TOYOTA)\b/i, 'TOYOTA'],
+    [/^(?:SUBARU)\b/i, 'SUBARU'],
+    [/^(?:FORD)\b/i, 'FORD']
+  ];
+  function deriveMake(explicitMake, internalRef) {
+    const direct = text(explicitMake);
+    if (direct) return direct.toUpperCase();
+    const ref = text(internalRef).replace(/[_-]+/g, ' ').trim();
+    for (const [rx, label] of MAKE_PREFIXES) if (rx.test(ref)) return label;
+    return 'UNKNOWN';
+  }
 
   function parseDate(v) {
     if (!v) return null;
@@ -166,6 +191,7 @@
       oem: oemRaw, oemKey: normalizeOEM(oemRaw), brand, brandKey: brand.toUpperCase(),
       brandPartNo: text(valueAt(row, map.brandPartNo)), description: text(valueAt(row, map.description)),
       category: text(valueAt(row, map.category)) || 'Uncategorized',
+      make: deriveMake(valueAt(row, map.make), internalRef),
       motorlineStock, bavariaStock, tibaoStock, allCompany,
       tibaoADRef: n(valueAt(row, map.tibaoADRef)), tibaoDXBRef: n(valueAt(row, map.tibaoDXBRef)),
       monthly, totalSales, salesCount: n(valueAt(row, map.salesCount)), lastSaleDate: parseDate(valueAt(row, map.lastSaleDate)),
@@ -445,5 +471,5 @@
     return {missing,columns};
   }
 
-  global.PurchaseEngine={DEFAULT_SETTINGS,MONTH_KEYS,CONDITION_OPTIONS,MOVEMENT_OPTIONS,PATTERN_OPTIONS,parseMatrix,calculate,dataQuality,normalizeOEM,parseDate,elapsedMonths};
+  global.PurchaseEngine={DEFAULT_SETTINGS,MONTH_KEYS,CONDITION_OPTIONS,MOVEMENT_OPTIONS,PATTERN_OPTIONS,parseMatrix,calculate,dataQuality,normalizeOEM,parseDate,elapsedMonths,deriveMake};
 })(window);

@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const E=window.PurchaseEngine;
-let state={products:[],computed:[],filtered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),activeView:'dashboard'};
+let state={products:[],computed:[],filtered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),activeView:'dashboard'};
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -75,23 +75,58 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.2`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
 function fillSelect(id,values,label){const el=$(id),cur=el.value;el.innerHTML=`<option value="">${label}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(values.includes(cur))el.value=cur;}
+
+function pruneSelection(set,values){const allowed=new Set(values);[...set].forEach(v=>{if(!allowed.has(v))set.delete(v);});}
+function updateMultiTrigger(type,values){
+ const set=type==='brand'?state.selectedBrands:state.selectedConditions;
+ const trigger=$(type==='brand'?'brandFilterTrigger':'conditionFilterTrigger');
+ const allLabel=type==='brand'?'All Brands':'All Conditions';
+ if(!set.size)trigger.textContent=allLabel;
+ else if(set.size===1)trigger.textContent=[...set][0];
+ else trigger.textContent=`${set.size} selected`;
+ trigger.classList.toggle('has-selection',set.size>0);
+}
+function renderMultiMenu(type,values){
+ const set=type==='brand'?state.selectedBrands:state.selectedConditions;
+ const menu=$(type==='brand'?'brandFilterMenu':'conditionFilterMenu');
+ const searchable=type==='brand';
+ menu.innerHTML=`
+  <div class="multi-head">
+   ${searchable?'<input class="multi-search" type="text" placeholder="Search brands..." autocomplete="off">':''}
+   <div class="multi-actions"><button type="button" data-action="all">Select all</button><button type="button" data-action="clear">Clear</button></div>
+  </div>
+  <div class="multi-options">${values.map(v=>`<label class="multi-option" data-label="${esc(String(v).toLowerCase())}"><input type="checkbox" value="${esc(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join('')}</div>`;
+ menu.querySelectorAll('.multi-option input').forEach(cb=>cb.onchange=()=>{cb.checked?set.add(cb.value):set.delete(cb.value);updateMultiTrigger(type,values);applyFilters();});
+ menu.querySelector('[data-action="all"]').onclick=()=>{values.forEach(v=>set.add(v));renderMultiMenu(type,values);updateMultiTrigger(type,values);applyFilters();};
+ menu.querySelector('[data-action="clear"]').onclick=()=>{set.clear();renderMultiMenu(type,values);updateMultiTrigger(type,values);applyFilters();};
+ const search=menu.querySelector('.multi-search');
+ if(search)search.oninput=()=>{const q=search.value.trim().toLowerCase();menu.querySelectorAll('.multi-option').forEach(x=>x.classList.toggle('hidden',q&&!x.dataset.label.includes(q)));};
+ updateMultiTrigger(type,values);
+}
 function populateFilters(){
- fillSelect('brandFilter',uniqueSorted('brand'),'All Brands');
- fillSelect('conditionFilter',E.CONDITION_OPTIONS,'All Conditions');
+ const brands=uniqueSorted('brand');pruneSelection(state.selectedBrands,brands);renderMultiMenu('brand',brands);
+ pruneSelection(state.selectedConditions,E.CONDITION_OPTIONS);renderMultiMenu('condition',E.CONDITION_OPTIONS);
+ fillSelect('makeFilter',uniqueSorted('make'),'All Makes');
  fillSelect('movementFilter',E.MOVEMENT_OPTIONS,'All Movement');
  fillSelect('patternFilter',E.PATTERN_OPTIONS,'All Patterns');
  fillSelect('categoryFilter',uniqueSorted('category'),'All Categories');
 }
 function applyFilters(){
- const q=$('search').value.trim().toLowerCase(),brand=$('brandFilter').value,cond=$('conditionFilter').value,mov=$('movementFilter').value,pat=$('patternFilter').value,cat=$('categoryFilter').value;
+ const q=$('search').value.trim().toLowerCase(),
+       desc=$('descriptionFilter').value.trim().toLowerCase(),
+       make=$('makeFilter').value,
+       mov=$('movementFilter').value,pat=$('patternFilter').value,cat=$('categoryFilter').value;
  state.filtered=state.computed.filter(p=>{
-  if(brand&&p.brand!==brand)return false;if(cond&&p.condition!==cond)return false;if(mov&&p.movement!==mov)return false;if(pat&&p.demandPattern!==pat)return false;if(cat&&p.category!==cat)return false;
-  if(q){const hay=[p.internalRef,p.oem,p.brand,p.brandPartNo,p.description,p.category].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+  if(state.selectedBrands.size&&!state.selectedBrands.has(p.brand))return false;
+  if(state.selectedConditions.size&&!state.selectedConditions.has(p.condition))return false;
+  if(make&&p.make!==make)return false;if(mov&&p.movement!==mov)return false;if(pat&&p.demandPattern!==pat)return false;if(cat&&p.category!==cat)return false;
+  if(desc&&!String(p.description||'').toLowerCase().includes(desc))return false;
+  if(q){const hay=[p.internalRef,p.oem,p.brand,p.brandPartNo,p.make,p.category].join(' ').toLowerCase();if(!hay.includes(q))return false;}
   return true;
  });
  state.page=1;renderDashboard();renderPlanner();
@@ -118,12 +153,12 @@ function confidenceClass(s){return s==='HIGH'?'confidence-high':s==='MEDIUM'?'co
 function patternClass(s){if(s==='REGULAR')return'ok';if(s==='RISING')return'fast';if(s==='FALLING')return'reorder';if(s==='INTERMITTENT')return'wait';if(s==='DEAD STOCK')return'dead';if(s==='DORMANT')return'dormant';if(s==='ONE-TIME SPIKE')return'spike';return'review';}
 
 function renderCompactTable(el,rows){
- el.innerHTML=`<thead><tr><th>Internal Ref</th><th>Add Description</th><th>OEM</th><th>Brand</th><th class="num">All Company</th><th class="num">On Way</th><th class="num">On Way 2</th><th>Demand Pattern</th><th class="num">Demand / Mo</th><th class="num">Active Months</th><th class="num">Purchase Qty</th><th>Same OEM Other Brands</th><th class="num">Cover</th><th>Condition</th><th class="num">Suggested Qty</th><th>Action</th></tr></thead><tbody>${rows.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.allCompany)}</td><td class="num">${fmt(p.onWay)}</td><td class="num">${fmt(p.onWay2)}</td><td><span class="badge ${patternClass(p.demandPattern)}">${esc(p.demandPattern)}</span></td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${p.activeMonths}/${p.monthCount}</td><td class="num">${fmt(p.totalPurchase)}</td><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.equivalentNote)}</button></td><td class="num">${cover(p.currentCover)}</td><td><span class="badge ${conditionClass(p.condition)}">${esc(p.condition)}</span></td><td class="num qty">${fmt(p.suggestedQty)}</td><td>${esc(p.action)}</td></tr>`).join('')||'<tr><td colspan="16" class="empty">No items match the current filters.</td></tr>'}</tbody>`;
+ el.innerHTML=`<thead><tr><th>Internal Ref</th><th>Add Description</th><th>Make</th><th>OEM</th><th>Brand</th><th class="num">All Company</th><th class="num">On Way</th><th class="num">On Way 2</th><th>Demand Pattern</th><th class="num">Demand / Mo</th><th class="num">Active Months</th><th class="num">Purchase Qty</th><th>Same OEM Other Brands</th><th class="num">Cover</th><th>Condition</th><th class="num">Suggested Qty</th><th>Action</th></tr></thead><tbody>${rows.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.make||'UNKNOWN')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.allCompany)}</td><td class="num">${fmt(p.onWay)}</td><td class="num">${fmt(p.onWay2)}</td><td><span class="badge ${patternClass(p.demandPattern)}">${esc(p.demandPattern)}</span></td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${p.activeMonths}/${p.monthCount}</td><td class="num">${fmt(p.totalPurchase)}</td><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.equivalentNote)}</button></td><td class="num">${cover(p.currentCover)}</td><td><span class="badge ${conditionClass(p.condition)}">${esc(p.condition)}</span></td><td class="num qty">${fmt(p.suggestedQty)}</td><td>${esc(p.action)}</td></tr>`).join('')||'<tr><td colspan="17" class="empty">No items match the current filters.</td></tr>'}</tbody>`;
  bindDetailLinks(el);
 }
 
 const plannerColumns=[
- ['internalRef','Internal Ref'],['description','Add Description'],['oem','OEM'],['brand','Brand'],['brandPartNo','Brand Part No.'],
+ ['internalRef','Internal Ref'],['description','Add Description'],['make','Make'],['oem','OEM'],['brand','Brand'],['brandPartNo','Brand Part No.'],
  ['allCompany','All Company Qty'],['onWay','On Way'],['onWay2','On Way 2'],['totalSales','Sales Qty'],['salesCount','Sales Count'],['activeMonths','Sales Months'],
  ['avgMonthlySales','Overall Avg'],['recent3Avg','Recent 3M'],['recent6Avg','Recent 6M'],['demandRate','Smart Demand'],['demandPattern','Demand Pattern'],['demandConfidence','Confidence'],
  ['totalPurchase','Purchase Qty'],['purchaseCount','Purchase Count'],['purchaseSalesRatio','Purch/Sales'],['purchaseSignal','Purchase Signal'],
@@ -155,7 +190,7 @@ function renderPlanner(){
  $('plannerResults').textContent=`${fmt(sorted.length)} items • ${fmt(sorted.reduce((s,p)=>s+p.suggestedQty,0))} pcs suggested`;
  $('pageInfo').textContent=`Page ${state.page} of ${pages} • showing ${rows.length}`;
  $('prevPage').disabled=state.page<=1;$('nextPage').disabled=state.page>=pages;
- $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="29" class="empty">No items match filters.</td></tr>'}</tbody>`;
+ $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="30" class="empty">No items match filters.</td></tr>'}</tbody>`;
  $('plannerTable').querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{const k=th.dataset.sort;if(state.sortKey===k)state.sortDir*=-1;else{state.sortKey=k;state.sortDir=1;}renderPlanner();});
  $('plannerTable').querySelectorAll('.row-select').forEach(cb=>cb.onchange=()=>{cb.checked?state.selected.add(cb.dataset.id):state.selected.delete(cb.dataset.id);updateSelectedButton();});
  const sp=$('selectPage');if(sp)sp.onchange=()=>{rows.forEach(p=>sp.checked?state.selected.add(p._id):state.selected.delete(p._id));renderPlanner();updateSelectedButton();};
@@ -175,13 +210,13 @@ function renderBrands(){
  $('brandTable').innerHTML=`<thead><tr><th>Brand</th><th class="num">Products</th><th class="num">Company Stock</th><th class="num">Fast</th><th class="num">Critical</th><th class="num">Reorder</th><th class="num">Wait</th><th class="num">Overstock</th><th class="num">Review</th><th class="num">Dead Stock</th><th class="num">Suggested Purchase</th></tr></thead><tbody>${rows.map(b=>`<tr class="brand-row" data-brand="${esc(b.brand)}"><td><button class="mini-link">${esc(b.brand)}</button></td><td class="num">${fmt(b.products)}</td><td class="num">${fmt(b.stock)}</td><td class="num">${fmt(b.fast)}</td><td class="num">${fmt(b.critical)}</td><td class="num">${fmt(b.reorder)}</td><td class="num">${fmt(b.wait)}</td><td class="num">${fmt(b.overstock)}</td><td class="num">${fmt(b.review)}</td><td class="num">${fmt(b.dead)}</td><td class="num qty">${fmt(b.suggested)}</td></tr>`).join('')}</tbody>`;
  $('brandTable').querySelectorAll('.brand-row').forEach(r=>r.onclick=()=>selectBrand(r.dataset.brand));
 }
-function selectBrand(brand){$('brandFilter').value=brand;applyFilters();setView('dashboard');toast(`Filtered to ${brand}`);}
+function selectBrand(brand){state.selectedBrands.clear();state.selectedBrands.add(brand);renderMultiMenu('brand',uniqueSorted('brand'));applyFilters();setView('dashboard');toast(`Filtered to ${brand}`);}
 
 function renderQuality(){
  if(!state.products.length){$('qualityGrid').innerHTML='<div class="empty">Upload data first.</div>';$('columnChecks').innerHTML='';return;}
  const q=E.dataQuality(state.products,state.map||{}),total=state.products.length;
  $('qualityGrid').innerHTML=`<div class="quality-card"><strong>${fmt(total)}</strong><span>Total product rows</span></div><div class="quality-card"><strong>${fmt(q.missing.oem)}</strong><span>Missing OEM (${((q.missing.oem/Math.max(1,total))*100).toFixed(1)}%)</span></div><div class="quality-card"><strong>${fmt(q.missing.brand)}</strong><span>Missing brand</span></div><div class="quality-card"><strong>${fmt(q.missing.lastSaleDate)}</strong><span>Sales rows missing Last Sale Date</span></div>`;
- const checks=[['Bavaria On Way',q.columns.bavariaOnWay],['Tibao SHJ On Way',q.columns.tibaoOnWay],['Report Till Date column',q.columns.reportDate],['Group On Way fallback',q.columns.groupOnWay],['Group On Way 2',q.columns.groupOnWay2],['Total Purchase Qty',q.columns.totalPurchase],['Purchase Count',q.columns.purchaseCount],['Last Purchase Date',q.columns.lastPurchaseDate]];
+ const checks=[['Odoo Make field (otherwise derived from Internal Ref)',q.columns.make],['Bavaria On Way',q.columns.bavariaOnWay],['Tibao SHJ On Way',q.columns.tibaoOnWay],['Report Till Date column',q.columns.reportDate],['Group On Way fallback',q.columns.groupOnWay],['Group On Way 2',q.columns.groupOnWay2],['Total Purchase Qty',q.columns.totalPurchase],['Purchase Count',q.columns.purchaseCount],['Last Purchase Date',q.columns.lastPurchaseDate]];
  $('columnChecks').innerHTML=checks.map(([l,ok])=>`<div class="check-item"><span>${esc(l)}</span><span class="${ok?'yes':'no'}">${ok?'✓ Available':'○ Missing / fallback'}</span></div>`).join('');
 }
 
@@ -189,7 +224,7 @@ function bindDetailLinks(root){root.querySelectorAll('.open-detail').forEach(b=>
 function openDetail(id){
  const p=state.computed.find(x=>x._id===id);if(!p)return;
  $('modalTitle').textContent=p.internalRef||p.brandPartNo||'Product analysis';
- $('modalSub').textContent=`${p.brand} • ${p.oem||'No OEM'} • ${p.description||''}`;
+ $('modalSub').textContent=`${p.make||'UNKNOWN'} • ${p.brand} • ${p.oem||'No OEM'} • ${p.description||''}`;
  const monthCount=p.monthCount,max=Math.max(1,...p.monthly.slice(0,monthCount));
  const monthBars=p.monthly.slice(0,monthCount).map((v,i)=>`<div class="month-cell"><div class="month-value">${fmt(v)}</div><div class="month-bar"><span style="height:${Math.max(2,(v/max)*100)}%"></span></div><div class="month-label">${months[i]}</div></div>`).join('');
  const altRows=p.alternatives.length?p.alternatives.map(a=>`<tr><td>${esc(a.brand)}</td><td>${esc(a.partNumbers.join(', ')||'—')}</td><td class="num">${fmt(a.stock)}</td><td class="num">${fmt(a.onWay)}</td><td class="num">${fmt(a.onWay2)}</td><td class="num">${fmt(a.sales)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">No exact same-OEM match in another brand.</td></tr>';
@@ -217,7 +252,7 @@ function exportRows(rows,name){
  if(!rows.length){toast('Nothing to export');return;}
  const data=rows.map(p=>{
    const out={
-    'Internal Reference':p.internalRef,'Add Description':p.description,'OEM':p.oem,'Brand':p.brand,'Brand Part No.':p.brandPartNo,'Category':p.category,
+    'Internal Reference':p.internalRef,'Add Description':p.description,'Make':p.make,'OEM':p.oem,'Brand':p.brand,'Brand Part No.':p.brandPartNo,'Category':p.category,
     'All Company Qty':p.allCompany,'On Way':p.onWay,'On Way 2':p.onWay2,
     'Sales Qty':p.totalSales,'Sales Count':p.salesCount,'Active Sales Months':`${p.activeMonths}/${p.monthCount}`,'Overall Avg / Mo':+p.avgMonthlySales.toFixed(2),'Recent 3M Avg':+p.recent3Avg.toFixed(2),'Recent 6M Avg':+p.recent6Avg.toFixed(2),'Smart Demand / Mo':+p.demandRate.toFixed(2),'Demand Pattern':p.demandPattern,'Demand Confidence':p.demandConfidence,'Last Sale Date':dateFmt(p.lastSaleDate),'Last Sale Age Months':p.lastSaleAgeMonths===null?'':+p.lastSaleAgeMonths.toFixed(2),'Zero Sales Streak Months':p.zeroSalesStreakMonths,'Inactivity Age Months':p.inactivityAgeMonths===null?'':+p.inactivityAgeMonths.toFixed(2),'Inactivity Basis':p.inactivityBasis,
     'Historical Purchase Qty':p.totalPurchase,'Purchase Count':p.purchaseCount,'Last Purchase Date':dateFmt(p.lastPurchaseDate),'Purchase/Sales Ratio':p.purchaseSalesRatio===Infinity?'INF':+p.purchaseSalesRatio.toFixed(2),'Purchase Signal':p.purchaseSignal,
@@ -241,11 +276,22 @@ function applySettingsFromUI(){
 $('fileInput').onchange=e=>handleFile(e.target.files[0]);$('demoBtn').onclick=loadDemo;
 const zone=$('uploadZone');['dragenter','dragover'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add('drag');}));['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove('drag');}));zone.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>setView(b.dataset.view));document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>setView(b.dataset.go));
-['search','brandFilter','conditionFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',applyFilters));
-$('clearFilters').onclick=()=>{['search','brandFilter','conditionFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).value='');applyFilters();};
-document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{$('conditionFilter').value=k.dataset.condition;applyFilters();});document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
+['search','descriptionFilter'].forEach(id=>$(id).addEventListener('input',applyFilters));
+['makeFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).addEventListener('change',applyFilters));
+function toggleMultiMenu(type){
+ const menu=$(type==='brand'?'brandFilterMenu':'conditionFilterMenu');
+ const other=$(type==='brand'?'conditionFilterMenu':'brandFilterMenu');
+ other.classList.add('hidden');menu.classList.toggle('hidden');
+}
+$('brandFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('brand');};
+$('conditionFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('condition');};
+['brandFilterMenu','conditionFilterMenu'].forEach(id=>$(id).onclick=e=>e.stopPropagation());
+document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');});
+$('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedConditions.clear();['search','descriptionFilter','makeFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).value='');populateFilters();applyFilters();};
+document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
+document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportRows(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Suggestions_v2_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_2_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportRows(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Suggestions_v2_2_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings={...E.DEFAULT_SETTINGS};saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
 
