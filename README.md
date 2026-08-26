@@ -1,18 +1,23 @@
-# TiBAO Purchase Intelligence v2.4
+# TiBAO Purchase Intelligence v2.5
 
-GitHub Pages browser-only purchase support prototype.
+GitHub Pages / browser-only purchase planning prototype.
 
-## v2.4 changes
-- Purchase Planner **Suggested Qty is editable**. The calculated suggestion is loaded as the default; purchaser can change it before export.
-- Suggested Qty and Purchase Action are moved immediately after Brand Part No.
-- `Export Selected` now creates a clean purchase Excel containing only:
-  1. Old Number
-  2. OEM No Space
-  3. Add Description
-  4. Available Quantity
-  5. Total Incoming Quantity (On Way + On Way 2)
-  6. Suggested Quantity (including purchaser edits)
-- `Export Filtered` / top `Export Suggestions` still keep the detailed analytical export.
+## New in v2.5
+- Projected **Current Stock-Out Date**
+- Projected **Stock-Out Date With On Way + On Way 2**
+- Optional **brand-specific lead time** in purchasing logic
+- Default lead time plus a per-brand editable rules table
+- Optional **MOQ** and **Order Multiple** rounding
+- MOQ / multiple are OFF by default because true MOQ may be product-specific
+- Detailed product explanation now shows lead time, expected new-order arrival, stock-out dates, MOQ/multiple and any quantity adjustment
+- Existing manual Suggested Qty override and the 6-column Selected Purchase export remain unchanged
+- No dead-stock value calculation was added
 
 ## GitHub update
-Replace `index.html`, `app.js`, `engine.js`, and `styles.css` in the existing repository, commit, wait for GitHub Pages to deploy, then hard-refresh with Ctrl+F5.
+Replace these four files in the existing repository:
+- index.html
+- app.js
+- engine.js
+- styles.css
+
+Commit, wait for GitHub Pages to redeploy, then press Ctrl+F5. The page should show **Logic v2.5**.

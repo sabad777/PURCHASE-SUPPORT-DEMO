@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v2.4 - calculation engine
+/* TiBAO Purchase Intelligence v2.5 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -35,7 +35,13 @@
     currentMonthNormalize: true,
     spikeDominancePct: 70,
     spikeMaxActiveMonths: 2,
-    regularActivePct: 60
+    regularActivePct: 60,
+    useLeadTime: false,
+    defaultLeadTimeDays: 45,
+    applyOrderConstraints: false,
+    defaultMOQ: 0,
+    defaultOrderMultiple: 1,
+    brandRules: {}
   };
 
   const HEADER_ALIASES = {
@@ -80,6 +86,49 @@
   function text(v) { return v === null || v === undefined ? '' : String(v).trim(); }
   function normalizeKey(v) { return text(v).toLowerCase().replace(/[\s._()\-\/]+/g, ''); }
   function normalizeOEM(v) { return text(v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  function cleanSettings(settingsInput) {
+    const settings = Object.assign({}, DEFAULT_SETTINGS, settingsInput || {});
+    settings.brandRules = (settingsInput && settingsInput.brandRules && typeof settingsInput.brandRules === 'object')
+      ? settingsInput.brandRules : {};
+    return settings;
+  }
+  function brandRule(settings, brand) {
+    const key = text(brand).toUpperCase();
+    const rules = settings.brandRules && typeof settings.brandRules === 'object' ? settings.brandRules : {};
+    return rules[key] || {};
+  }
+  function nonNegativeNumber(v, fallback) {
+    const x = Number(v);
+    return Number.isFinite(x) && x >= 0 ? x : fallback;
+  }
+  function purchaseRules(settings, brand) {
+    const r = brandRule(settings, brand);
+    return {
+      leadTimeDays: nonNegativeNumber(r.leadTimeDays, nonNegativeNumber(settings.defaultLeadTimeDays, 45)),
+      moq: nonNegativeNumber(r.moq, nonNegativeNumber(settings.defaultMOQ, 0)),
+      orderMultiple: Math.max(1, nonNegativeNumber(r.orderMultiple, nonNegativeNumber(settings.defaultOrderMultiple, 1)))
+    };
+  }
+  function addDays(date, days) {
+    if (!(date instanceof Date) || isNaN(date)) return null;
+    const d = new Date(date.getTime());
+    d.setDate(d.getDate() + Math.max(0, Math.round(days || 0)));
+    return d;
+  }
+  function projectedStockoutDate(reportDate, supplyQty, demandPerMonth) {
+    if (!(reportDate instanceof Date) || isNaN(reportDate) || !(demandPerMonth > 0)) return null;
+    const days = Math.max(0, Number(supplyQty || 0)) / demandPerMonth * 30.4375;
+    return addDays(reportDate, days);
+  }
+  function applyOrderConstraints(qty, moq, multiple) {
+    let q = Math.max(0, Math.ceil(Number(qty) || 0));
+    if (q <= 0) return 0;
+    const minQty = Math.max(0, Math.ceil(Number(moq) || 0));
+    const step = Math.max(1, Math.ceil(Number(multiple) || 1));
+    q = Math.max(q, minQty);
+    return Math.ceil(q / step) * step;
+  }
 
   // Vehicle make mapping from the confirmed old/internal-reference prefixes used by the business.
   // Exact token matching prevents BE (Bentley) from ever being confused with BENZ (Mercedes-Benz).
@@ -371,7 +420,7 @@
   }
 
   function calculate(products, settingsInput, reportDate) {
-    const settings = Object.assign({}, DEFAULT_SETTINGS, settingsInput || {});
+    const settings = cleanSettings(settingsInput);
     const families = buildFamilies(products);
 
     return products.map(p => {
@@ -402,9 +451,30 @@
       const currentCover = demand > 0 ? p.allCompany/demand : (p.allCompany>0?Infinity:0);
       const pipelineCover = demand > 0 ? directSupply/demand : (directSupply>0?Infinity:0);
       const effectiveCover = demand > 0 ? effectiveSupply/demand : (effectiveSupply>0?Infinity:0);
-      const targetMonths = settings.targetCover + settings.safetyCover;
+
+      // Brand-aware lead time is optional. When enabled, the reorder horizon cannot be shorter
+      // than the time required to receive a new purchase plus the configured safety buffer.
+      const rules = purchaseRules(settings, p.brand);
+      const leadTimeMonths = rules.leadTimeDays / 30.4375;
+      const normalTargetMonths = settings.targetCover + settings.safetyCover;
+      const leadTimeRequiredCover = leadTimeMonths + settings.safetyCover;
+      const reorderThreshold = settings.useLeadTime
+        ? Math.max(settings.reorderCover, leadTimeRequiredCover)
+        : settings.reorderCover;
+      const proactiveThreshold = settings.useLeadTime
+        ? Math.max(settings.targetCover, leadTimeRequiredCover)
+        : settings.targetCover;
+      const targetMonths = settings.useLeadTime
+        ? Math.max(normalTargetMonths, leadTimeRequiredCover)
+        : normalTargetMonths;
       const targetQty = demand * targetMonths;
       const targetGapQty = Math.max(0, Math.ceil(targetQty - effectiveSupply));
+
+      // Dates are shown even when lead-time logic is disabled because they are useful planning signals.
+      const currentStockoutDate = projectedStockoutDate(reportDate, p.allCompany, demand);
+      const pipelineStockoutDate = projectedStockoutDate(reportDate, directSupply, demand);
+      const expectedNewOrderArrivalDate = addDays(reportDate, rules.leadTimeDays);
+      const leadTimeRisk = settings.useLeadTime && demand > 0 && effectiveCover < leadTimeRequiredCover;
 
       let movement = 'NO SALES';
       if (sp.isDead) movement = 'DEAD STOCK';
@@ -421,17 +491,20 @@
       else if (demand <= 0) condition = 'NO SALES / REVIEW';
       else if (effectiveCover < settings.criticalCover) condition = 'CRITICAL ORDER';
       else if (settings.suggestionMode === 'trigger') {
-        if (effectiveCover < settings.reorderCover) condition = 'REORDER SOON';
-        else if (currentCover < settings.reorderCover && (p.onWay + p.onWay2 + equivalentCredit) > 0) condition = 'WAIT INCOMING';
+        if (effectiveCover < reorderThreshold) condition = 'REORDER SOON';
+        else if (currentCover < reorderThreshold && (p.onWay + p.onWay2 + equivalentCredit) > 0) condition = 'WAIT INCOMING';
         else condition = 'OK';
       } else {
-        // Proactive mode: recommend a top-up whenever projected cover is below the normal target.
-        if (currentCover < settings.targetCover && effectiveCover >= settings.targetCover && (p.onWay + p.onWay2 + equivalentCredit) > 0) condition = 'WAIT INCOMING';
-        else if (effectiveCover < settings.targetCover) condition = 'REORDER SOON';
+        // Proactive mode: recommend a top-up whenever projected cover is below the planning horizon.
+        if (currentCover < proactiveThreshold && effectiveCover >= proactiveThreshold && (p.onWay + p.onWay2 + equivalentCredit) > 0) condition = 'WAIT INCOMING';
+        else if (effectiveCover < proactiveThreshold) condition = 'REORDER SOON';
         else condition = 'OK';
       }
 
-      if (condition === 'CRITICAL ORDER' || condition === 'REORDER SOON') suggested = targetGapQty;
+      const rawSuggestedQty = (condition === 'CRITICAL ORDER' || condition === 'REORDER SOON') ? targetGapQty : 0;
+      suggested = settings.applyOrderConstraints
+        ? applyOrderConstraints(rawSuggestedQty, rules.moq, rules.orderMultiple)
+        : rawSuggestedQty;
       if (condition === 'CRITICAL ORDER') { priority=1; action='ORDER NOW'; }
       else if (condition === 'REORDER SOON') { priority=2; action='ADD TO NEXT PURCHASE'; }
       else if (condition === 'WAIT INCOMING') { priority=3; action=p.onWay>0?'WAIT / EXPEDITE ON WAY':'FOLLOW UP ON WAY 2'; }
@@ -458,12 +531,20 @@
       if (pp.purchaseSignal !== 'BALANCED' && pp.purchaseSignal !== 'NO PURCHASE HISTORY') reasonParts.push(pp.purchaseSignal.toLowerCase());
       if (alternatives.length) reasonParts.push(`same OEM other brands ${formatNumber(otherStock,0)} stock`);
       if (settings.equivalentCreditPct > 0 && alternatives.length) reasonParts.push(`${settings.equivalentCreditPct}% equivalent credit used`);
+      if (settings.useLeadTime) reasonParts.push(`brand lead time ${formatNumber(rules.leadTimeDays,0)} days`);
+      if (leadTimeRisk) reasonParts.push('projected supply is short of lead-time + safety cover');
+      if (settings.applyOrderConstraints && suggested !== rawSuggestedQty && rawSuggestedQty > 0) {
+        reasonParts.push(`MOQ/multiple adjusted ${formatNumber(rawSuggestedQty,0)} → ${formatNumber(suggested,0)}`);
+      }
       if (suggested > 0) reasonParts.push(`replenish toward ${targetMonths.toFixed(1)} months`);
 
       return Object.assign({}, p, sp, pp, {
         avgMonthlySales:sp.overall, recent3Avg:sp.recent3, recent6Avg:sp.recent6, demandRate:demand,
         demandPattern:sp.pattern, demandConfidence:sp.confidence, movement,
         currentCover,pipelineCover,effectiveCover,directSupply,effectiveSupply,
+        currentStockoutDate,pipelineStockoutDate,expectedNewOrderArrivalDate,
+        leadTimeDays:rules.leadTimeDays,leadTimeMonths,leadTimeRequiredCover,reorderThreshold,leadTimeRisk,
+        moq:rules.moq,orderMultiple:rules.orderMultiple,rawSuggestedQty,
         alternatives,otherStock,otherOnWay,otherOnWay2,otherSupply,equivalentCredit,equivalentNote,
         condition,priority,targetQty,targetGapQty,suggestedQty:suggested,action,reason:reasonParts.join(' • ')
       });

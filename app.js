@@ -9,11 +9,21 @@ const fmt=(x,d=0)=>Number.isFinite(x)?x.toLocaleString(undefined,{maximumFractio
 const dateFmt=d=>d instanceof Date&&!isNaN(d)?d.toISOString().slice(0,10):'—';
 const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function loadSettings(){try{return Object.assign({},E.DEFAULT_SETTINGS,JSON.parse(localStorage.getItem('purchaseSettingsV2')||'{}'));}catch(_){return {...E.DEFAULT_SETTINGS};}}
+function normalizeSettings(raw){
+ const out=Object.assign({},E.DEFAULT_SETTINGS,raw||{});
+ out.brandRules=(raw&&raw.brandRules&&typeof raw.brandRules==='object')?raw.brandRules:{};
+ return out;
+}
+function loadSettings(){try{return normalizeSettings(JSON.parse(localStorage.getItem('purchaseSettingsV2')||'{}'));}catch(_){return normalizeSettings({});}}
 function saveSettings(){localStorage.setItem('purchaseSettingsV2',JSON.stringify(state.settings));}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),2600);}
 function cover(x){return x===Infinity?'∞':fmt(x,1);}
 function ratio(x){return x===Infinity?'∞':Number.isFinite(x)?x.toFixed(2):'—';}
+function stockoutFmt(d,demand,supply){
+ if(!(d instanceof Date)||isNaN(d))return demand>0?'—':'No demand forecast';
+ if(demand>0&&supply<=0)return 'OUT NOW';
+ return dateFmt(d);
+}
 function plannerQty(p){const v=state.qtyOverrides.get(p._id);return v===undefined?p.suggestedQty:v;}
 function setPlannerQty(p,value){
  const parsed=Number(value);const qty=Number.isFinite(parsed)?Math.max(0,Math.round(parsed)):p.suggestedQty;
@@ -82,7 +92,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.4`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.5`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -160,14 +170,14 @@ function confidenceClass(s){return s==='HIGH'?'confidence-high':s==='MEDIUM'?'co
 function patternClass(s){if(s==='REGULAR')return'ok';if(s==='RISING')return'fast';if(s==='FALLING')return'reorder';if(s==='INTERMITTENT')return'wait';if(s==='DEAD STOCK')return'dead';if(s==='DORMANT')return'dormant';if(s==='ONE-TIME SPIKE')return'spike';return'review';}
 
 function renderCompactTable(el,rows){
- el.innerHTML=`<thead><tr><th>Internal Ref</th><th>Add Description</th><th>Make</th><th>OEM</th><th>Brand</th><th class="num">All Company</th><th class="num">On Way</th><th class="num">On Way 2</th><th>Demand Pattern</th><th class="num">Demand / Mo</th><th class="num">Active Months</th><th class="num">Purchase Qty</th><th>Same OEM Other Brands</th><th class="num">Cover</th><th>Condition</th><th class="num">Suggested Qty</th><th>Action</th></tr></thead><tbody>${rows.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.make||'UNKNOWN')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.allCompany)}</td><td class="num">${fmt(p.onWay)}</td><td class="num">${fmt(p.onWay2)}</td><td><span class="badge ${patternClass(p.demandPattern)}">${esc(p.demandPattern)}</span></td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${p.activeMonths}/${p.monthCount}</td><td class="num">${fmt(p.totalPurchase)}</td><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.equivalentNote)}</button></td><td class="num">${cover(p.currentCover)}</td><td><span class="badge ${conditionClass(p.condition)}">${esc(p.condition)}</span></td><td class="num qty">${fmt(plannerQty(p))}</td><td>${esc(p.action)}</td></tr>`).join('')||'<tr><td colspan="17" class="empty">No items match the current filters.</td></tr>'}</tbody>`;
+ el.innerHTML=`<thead><tr><th>Internal Ref</th><th>Add Description</th><th>Make</th><th>OEM</th><th>Brand</th><th class="num">All Company</th><th class="num">On Way</th><th class="num">On Way 2</th><th>Current Stock-Out</th><th>With Incoming</th><th>Demand Pattern</th><th class="num">Demand / Mo</th><th class="num">Active Months</th><th class="num">Purchase Qty</th><th>Same OEM Other Brands</th><th class="num">Cover</th><th>Condition</th><th class="num">Suggested Qty</th><th>Action</th></tr></thead><tbody>${rows.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.make||'UNKNOWN')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.allCompany)}</td><td class="num">${fmt(p.onWay)}</td><td class="num">${fmt(p.onWay2)}</td><td>${esc(stockoutFmt(p.currentStockoutDate,p.demandRate,p.allCompany))}</td><td>${esc(stockoutFmt(p.pipelineStockoutDate,p.demandRate,p.directSupply))}</td><td><span class="badge ${patternClass(p.demandPattern)}">${esc(p.demandPattern)}</span></td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${p.activeMonths}/${p.monthCount}</td><td class="num">${fmt(p.totalPurchase)}</td><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.equivalentNote)}</button></td><td class="num">${cover(p.currentCover)}</td><td><span class="badge ${conditionClass(p.condition)}">${esc(p.condition)}</span></td><td class="num qty">${fmt(plannerQty(p))}</td><td>${esc(p.action)}</td></tr>`).join('')||'<tr><td colspan="19" class="empty">No items match the current filters.</td></tr>'}</tbody>`;
  bindDetailLinks(el);
 }
 
 const plannerColumns=[
  ['internalRef','Internal Ref'],['description','Add Description'],['make','Make'],['oem','OEM'],['brand','Brand'],['brandPartNo','Brand Part No.'],
  ['suggestedQty','Suggested Qty (Editable)'],['action','Purchase Action'],
- ['allCompany','All Company Qty'],['onWay','On Way'],['onWay2','On Way 2'],['totalSales','Sales Qty'],['salesCount','Sales Count'],['activeMonths','Sales Months'],
+ ['allCompany','All Company Qty'],['onWay','On Way'],['onWay2','On Way 2'],['currentStockoutDate','Current Stock-Out'],['pipelineStockoutDate','With Incoming Stock-Out'],['leadTimeDays','Lead Time Days'],['totalSales','Sales Qty'],['salesCount','Sales Count'],['activeMonths','Sales Months'],
  ['avgMonthlySales','Overall Avg'],['recent3Avg','Recent 3M'],['recent6Avg','Recent 6M'],['demandRate','Smart Demand'],['demandPattern','Demand Pattern'],['demandConfidence','Confidence'],
  ['totalPurchase','Purchase Qty'],['purchaseCount','Purchase Count'],['purchaseSalesRatio','Purch/Sales'],['purchaseSignal','Purchase Signal'],
  ['equivalentNote','Same OEM Other Brands'],['currentCover','Current Cover'],['pipelineCover','Pipeline Cover'],['condition','Stock Condition'],['priority','Priority']
@@ -177,7 +187,9 @@ function plannerCell(p,k){
  if(k==='internalRef')return`<td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(v||'—')}</button></td>`;
  if(k==='description')return`<td class="desc" title="${esc(v)}">${esc(v||'—')}</td>`;
  if(k==='suggestedQty'){const q=plannerQty(p),modified=state.qtyOverrides.has(p._id);return`<td class="num qty-cell"><input class="qty-edit ${modified?'modified':''}" type="number" min="0" step="1" value="${q}" data-id="${esc(p._id)}" data-calculated="${p.suggestedQty}" title="Calculated suggestion: ${p.suggestedQty}. Edit this quantity before exporting."></td>`;}
- if(['allCompany','onWay','onWay2','totalSales','salesCount','totalPurchase','purchaseCount'].includes(k))return`<td class="num">${fmt(v)}</td>`;
+ if(['allCompany','onWay','onWay2','leadTimeDays','totalSales','salesCount','totalPurchase','purchaseCount','leadTimeDays'].includes(k))return`<td class="num">${fmt(v)}</td>`;
+ if(k==='currentStockoutDate')return`<td>${esc(stockoutFmt(v,p.demandRate,p.allCompany))}</td>`;
+ if(k==='pipelineStockoutDate')return`<td>${esc(stockoutFmt(v,p.demandRate,p.directSupply))}</td>`;
  if(k==='activeMonths')return`<td class="num">${p.activeMonths}/${p.monthCount}</td>`;
  if(['avgMonthlySales','recent3Avg','recent6Avg','demandRate'].includes(k))return`<td class="num">${fmt(v,1)}</td>`;
  if(['currentCover','pipelineCover'].includes(k))return`<td class="num">${cover(v)}</td>`;
@@ -199,14 +211,14 @@ function renderPlanner(){
  $('plannerResults').textContent=`${fmt(sorted.length)} items • ${fmt(totalPlannerQty(sorted))} pcs planned`;
  $('pageInfo').textContent=`Page ${state.page} of ${pages} • showing ${rows.length}`;
  $('prevPage').disabled=state.page<=1;$('nextPage').disabled=state.page>=pages;
- $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="30" class="empty">No items match filters.</td></tr>'}</tbody>`;
+ $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','leadTimeDays','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="30" class="empty">No items match filters.</td></tr>'}</tbody>`;
  $('plannerTable').querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{const k=th.dataset.sort;if(state.sortKey===k)state.sortDir*=-1;else{state.sortKey=k;state.sortDir=1;}renderPlanner();});
  $('plannerTable').querySelectorAll('.row-select').forEach(cb=>cb.onchange=()=>{cb.checked?state.selected.add(cb.dataset.id):state.selected.delete(cb.dataset.id);updateSelectedButton();});
  $('plannerTable').querySelectorAll('.qty-edit').forEach(inp=>{inp.onfocus=()=>inp.select();inp.onchange=()=>{const p=state.computed.find(x=>x._id===inp.dataset.id);if(!p)return;const q=setPlannerQty(p,inp.value);inp.value=q;inp.classList.toggle('modified',state.qtyOverrides.has(p._id));$('plannerResults').textContent=`${fmt(state.filtered.length)} items • ${fmt(totalPlannerQty(state.filtered))} pcs planned`;$('kpiSuggested').textContent=fmt(totalPlannerQty(state.filtered));toast(q===p.suggestedQty?'Quantity reset to calculated suggestion':`Purchase quantity changed to ${fmt(q)}`);};});
  const sp=$('selectPage');if(sp)sp.onchange=()=>{rows.forEach(p=>sp.checked?state.selected.add(p._id):state.selected.delete(p._id));renderPlanner();updateSelectedButton();};
  bindDetailLinks($('plannerTable'));updateSelectedButton();
 }
-function sortCompare(a,b,k,d){let av=k==='suggestedQty'?plannerQty(a):a[k],bv=k==='suggestedQty'?plannerQty(b):b[k];if(typeof av==='string'||typeof bv==='string')return String(av??'').localeCompare(String(bv??''))*d;av=Number.isFinite(av)?av:-Infinity;bv=Number.isFinite(bv)?bv:-Infinity;return(av-bv)*d;}
+function sortCompare(a,b,k,d){let av=k==='suggestedQty'?plannerQty(a):a[k],bv=k==='suggestedQty'?plannerQty(b):b[k];if(av instanceof Date||bv instanceof Date){av=av instanceof Date?av.getTime():-Infinity;bv=bv instanceof Date?bv.getTime():-Infinity;return(av-bv)*d;}if(typeof av==='string'||typeof bv==='string')return String(av??'').localeCompare(String(bv??''))*d;av=Number.isFinite(av)?av:-Infinity;bv=Number.isFinite(bv)?bv:-Infinity;return(av-bv)*d;}
 function updateSelectedButton(){$('exportSelected').disabled=state.selected.size===0;$('exportSelected').textContent=`Export Selected (${state.selected.size})`;}
 
 function brandSummary(){
@@ -256,10 +268,14 @@ function openDetail(id){
    <div class="metric"><div class="m-label">Active Sales Months</div><div class="m-value">${p.activeMonths}/${p.monthCount}</div></div>
    <div class="metric"><div class="m-label">Smart Demand / Mo</div><div class="m-value">${fmt(p.demandRate,1)}</div></div>
    <div class="metric"><div class="m-label">Demand Confidence</div><div class="m-value"><span class="badge ${confidenceClass(p.demandConfidence)}">${esc(p.demandConfidence)}</span></div></div>
+   <div class="metric"><div class="m-label">Current Stock-Out</div><div class="m-value small-date">${esc(stockoutFmt(p.currentStockoutDate,p.demandRate,p.allCompany))}</div></div>
+   <div class="metric"><div class="m-label">With Incoming Stock-Out</div><div class="m-value small-date">${esc(stockoutFmt(p.pipelineStockoutDate,p.demandRate,p.directSupply))}</div></div>
+   <div class="metric"><div class="m-label">Brand Lead Time</div><div class="m-value">${fmt(p.leadTimeDays)} days</div></div>
+   <div class="metric"><div class="m-label">Expected New Order Arrival</div><div class="m-value small-date">${esc(dateFmt(p.expectedNewOrderArrivalDate))}</div></div>
   </div>
   <div class="section-block"><div class="section-block-title">Monthly Sales Pattern</div><div class="month-chart">${monthBars}</div><div class="micro-grid"><span>Overall Avg <strong>${fmt(p.avgMonthlySales,1)}</strong></span><span>Recent 3M <strong>${fmt(p.recent3Avg,1)}</strong></span><span>Recent 6M <strong>${fmt(p.recent6Avg,1)}</strong></span><span>Pattern <strong>${esc(p.demandPattern)}</strong></span><span>Largest month share <strong>${fmt(p.spikeSharePct,0)}%</strong></span><span>Last sale <strong>${esc(lastSale)}</strong></span><span>Zero-sales streak <strong>${fmt(p.zeroSalesStreakMonths,0)} months</strong></span><span>Inactivity basis <strong>${esc(p.inactivityBasis||'—')}</strong></span></div></div>
   <div class="section-block"><div class="section-block-title">Purchase History Signal</div><div class="micro-grid"><span>Total Purchase Qty <strong>${fmt(p.totalPurchase)}</strong></span><span>Purchase Count <strong>${fmt(p.purchaseCount)}</strong></span><span>Last Purchase <strong>${esc(lastPurchase)}</strong></span><span>Purchase / Sales <strong>${ratio(p.purchaseSalesRatio)}</strong></span><span>Signal <strong>${esc(p.purchaseSignal)}</strong></span></div><div class="note-box">Historical purchases are <strong>not subtracted again</strong> from the suggestion because receipts are already reflected in current stock. They are used to detect overbuying, recent replenishment and unusual purchase/sales patterns.</div></div>
-  <div class="section-block"><div class="section-block-title">Suggested Purchase Calculation</div><div class="formula-box"><strong>${esc(p.condition)} — ${esc(p.action)}</strong><br>${esc(p.reason)}<br><br>Current cover: <strong>${cover(p.currentCover)} mo</strong> • With On Way + On Way 2: <strong>${cover(p.pipelineCover)} mo</strong> • Target gap before reorder rule: <strong>${fmt(p.targetGapQty)} pcs</strong><br>Final suggested quantity: <strong>${fmt(p.suggestedQty)} pcs</strong></div></div>
+  <div class="section-block"><div class="section-block-title">Suggested Purchase Calculation</div><div class="formula-box"><strong>${esc(p.condition)} — ${esc(p.action)}</strong><br>${esc(p.reason)}<br><br>Current cover: <strong>${cover(p.currentCover)} mo</strong> • With On Way + On Way 2: <strong>${cover(p.pipelineCover)} mo</strong> • Lead time: <strong>${fmt(p.leadTimeDays)} days</strong> • Lead-time + safety cover: <strong>${cover(p.leadTimeRequiredCover)} mo</strong><br>Target gap before MOQ/multiple: <strong>${fmt(p.rawSuggestedQty)} pcs</strong> • MOQ: <strong>${fmt(p.moq)}</strong> • Order multiple: <strong>${fmt(p.orderMultiple)}</strong><br>Calculated suggested quantity: <strong>${fmt(p.suggestedQty)} pcs</strong>${state.qtyOverrides.has(p._id)?` • Purchaser override: <strong>${fmt(plannerQty(p))} pcs</strong>`:''}</div></div>
   <div class="section-block"><div class="section-block-title">Exact Same OEM — Other Brands</div><table class="alt-table"><thead><tr><th>Brand</th><th>Brand Part No.</th><th class="num">Stock</th><th class="num">On Way</th><th class="num">On Way 2</th><th class="num">Sales</th></tr></thead><tbody>${altRows}</tbody></table></div>`;
  $('modalBackdrop').classList.remove('hidden');
 }
@@ -273,7 +289,10 @@ function exportRows(rows,name){
     'Sales Qty':p.totalSales,'Sales Count':p.salesCount,'Active Sales Months':`${p.activeMonths}/${p.monthCount}`,'Overall Avg / Mo':+p.avgMonthlySales.toFixed(2),'Recent 3M Avg':+p.recent3Avg.toFixed(2),'Recent 6M Avg':+p.recent6Avg.toFixed(2),'Smart Demand / Mo':+p.demandRate.toFixed(2),'Demand Pattern':p.demandPattern,'Demand Confidence':p.demandConfidence,'Last Sale Date':dateFmt(p.lastSaleDate),'Last Sale Age Months':p.lastSaleAgeMonths===null?'':+p.lastSaleAgeMonths.toFixed(2),'Zero Sales Streak Months':p.zeroSalesStreakMonths,'Inactivity Age Months':p.inactivityAgeMonths===null?'':+p.inactivityAgeMonths.toFixed(2),'Inactivity Basis':p.inactivityBasis,
     'Historical Purchase Qty':p.totalPurchase,'Purchase Count':p.purchaseCount,'Last Purchase Date':dateFmt(p.lastPurchaseDate),'Purchase/Sales Ratio':p.purchaseSalesRatio===Infinity?'INF':+p.purchaseSalesRatio.toFixed(2),'Purchase Signal':p.purchaseSignal,
     'Same OEM Other Brand Stock':p.otherStock,'Same OEM Other Brand On Way':p.otherOnWay,'Same OEM Other Brand On Way 2':p.otherOnWay2,'Same OEM Detail':p.equivalentNote,
-    'Current Months Cover':p.currentCover===Infinity?'INF':+p.currentCover.toFixed(2),'Pipeline Months Cover':p.pipelineCover===Infinity?'INF':+p.pipelineCover.toFixed(2),'Stock Condition':p.condition,'Priority':p.priority,'Target Gap Qty':p.targetGapQty,'Suggested Purchase Qty':plannerQty(p),'Purchase Action':p.action,'Reason':p.reason
+    'Current Months Cover':p.currentCover===Infinity?'INF':+p.currentCover.toFixed(2),'Pipeline Months Cover':p.pipelineCover===Infinity?'INF':+p.pipelineCover.toFixed(2),
+    'Current Stock-Out Date':stockoutFmt(p.currentStockoutDate,p.demandRate,p.allCompany),'With Incoming Stock-Out Date':stockoutFmt(p.pipelineStockoutDate,p.demandRate,p.directSupply),
+    'Brand Lead Time Days':p.leadTimeDays,'Expected New Order Arrival':dateFmt(p.expectedNewOrderArrivalDate),'MOQ Setting':p.moq,'Order Multiple Setting':p.orderMultiple,
+    'Stock Condition':p.condition,'Priority':p.priority,'Target Gap Qty':p.targetGapQty,'System Suggested Qty':p.suggestedQty,'Suggested Purchase Qty':plannerQty(p),'Purchase Action':p.action,'Reason':p.reason
    };
    months.forEach((m,i)=>out[`${m} Sales`]=p.monthly[i]||0);return out;
   });
@@ -296,12 +315,42 @@ function exportSelectedPurchase(rows,name){
  XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} selected items`);
 }
 
+function renderBrandRulesUI(){
+ const table=$('brandRulesTable');if(!table)return;
+ const brandNames=new Map();
+ state.products.forEach(p=>{if(p.brand)brandNames.set(String(p.brand).toUpperCase(),p.brand);});
+ Object.entries(state.settings.brandRules||{}).forEach(([k,r])=>brandNames.set(k,(r&&r.brand)||k));
+ const rows=[...brandNames.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+ if(!rows.length){table.innerHTML='<tbody><tr><td colspan="4" class="empty">Upload an Excel file to configure brand-specific purchasing rules.</td></tr></tbody>';return;}
+ const s=state.settings;
+ table.innerHTML=`<thead><tr><th>Brand</th><th class="num">Lead Time Days</th><th class="num">MOQ (optional)</th><th class="num">Order Multiple (optional)</th></tr></thead><tbody>${rows.map(([key,name])=>{
+  const r=(s.brandRules||{})[key]||{};
+  const lead=Number.isFinite(+r.leadTimeDays)?+r.leadTimeDays:s.defaultLeadTimeDays;
+  const moq=Number.isFinite(+r.moq)?+r.moq:s.defaultMOQ;
+  const mult=Number.isFinite(+r.orderMultiple)&&+r.orderMultiple>0?+r.orderMultiple:s.defaultOrderMultiple;
+  return `<tr class="brand-rule-row" data-search="${esc(String(name).toLowerCase())}"><td><strong>${esc(name)}</strong></td><td class="num"><input class="rule-input" data-brand-key="${esc(key)}" data-brand-name="${esc(name)}" data-field="leadTimeDays" type="number" min="0" step="1" value="${lead}"></td><td class="num"><input class="rule-input" data-brand-key="${esc(key)}" data-brand-name="${esc(name)}" data-field="moq" type="number" min="0" step="1" value="${moq}"></td><td class="num"><input class="rule-input" data-brand-key="${esc(key)}" data-brand-name="${esc(name)}" data-field="orderMultiple" type="number" min="1" step="1" value="${mult}"></td></tr>`;
+ }).join('')}</tbody>`;
+}
 function syncSettingsUI(){
  const s=state.settings;$('sTarget').value=s.targetCover;$('sSafety').value=s.safetyCover;$('sCritical').value=s.criticalCover;$('sReorder').value=s.reorderCover;$('sOverstock').value=s.overstockCover;$('sDormant').value=s.dormantMonths;$('sDead').value=s.deadStockMonths;$('sFast').value=s.fastRate;$('sMedium').value=s.mediumRate;$('sSpike').value=s.spikeDominancePct;$('sRegular').value=s.regularActivePct;$('sEquivalent').value=s.equivalentCreditPct;$('sDemand').value=s.demandMethod;$('sSuggestionMode').value=s.suggestionMode;
+ $('sUseLeadTime').value=s.useLeadTime?'on':'off';$('sDefaultLead').value=s.defaultLeadTimeDays;$('sApplyConstraints').value=s.applyOrderConstraints?'on':'off';$('sDefaultMOQ').value=s.defaultMOQ;$('sDefaultMultiple').value=s.defaultOrderMultiple;
+ renderBrandRulesUI();
 }
 function applySettingsFromUI(){
  state.qtyOverrides.clear();
- state.settings.targetCover=+$('sTarget').value;state.settings.safetyCover=+$('sSafety').value;state.settings.criticalCover=+$('sCritical').value;state.settings.reorderCover=+$('sReorder').value;state.settings.overstockCover=+$('sOverstock').value;state.settings.dormantMonths=+$('sDormant').value;state.settings.deadStockMonths=+$('sDead').value;state.settings.fastRate=+$('sFast').value;state.settings.mediumRate=+$('sMedium').value;state.settings.spikeDominancePct=+$('sSpike').value;state.settings.regularActivePct=+$('sRegular').value;state.settings.equivalentCreditPct=+$('sEquivalent').value;state.settings.demandMethod=$('sDemand').value;state.settings.suggestionMode=$('sSuggestionMode').value;saveSettings();recompute();toast('Calculation settings applied');
+ state.settings.targetCover=+$('sTarget').value;state.settings.safetyCover=+$('sSafety').value;state.settings.criticalCover=+$('sCritical').value;state.settings.reorderCover=+$('sReorder').value;state.settings.overstockCover=+$('sOverstock').value;state.settings.dormantMonths=+$('sDormant').value;state.settings.deadStockMonths=+$('sDead').value;state.settings.fastRate=+$('sFast').value;state.settings.mediumRate=+$('sMedium').value;state.settings.spikeDominancePct=+$('sSpike').value;state.settings.regularActivePct=+$('sRegular').value;state.settings.equivalentCreditPct=+$('sEquivalent').value;state.settings.demandMethod=$('sDemand').value;state.settings.suggestionMode=$('sSuggestionMode').value;
+ state.settings.useLeadTime=$('sUseLeadTime').value==='on';state.settings.defaultLeadTimeDays=Math.max(0,+$('sDefaultLead').value||0);state.settings.applyOrderConstraints=$('sApplyConstraints').value==='on';state.settings.defaultMOQ=Math.max(0,+$('sDefaultMOQ').value||0);state.settings.defaultOrderMultiple=Math.max(1,+$('sDefaultMultiple').value||1);
+ const rules={...(state.settings.brandRules||{})};
+ document.querySelectorAll('#brandRulesTable .rule-input').forEach(inp=>{
+  const key=inp.dataset.brandKey,name=inp.dataset.brandName,field=inp.dataset.field;
+  if(!rules[key])rules[key]={brand:name};
+  rules[key].brand=name;
+  if(field==='leadTimeDays')rules[key][field]=Math.max(0,+inp.value||0);
+  else if(field==='moq')rules[key][field]=Math.max(0,+inp.value||0);
+  else rules[key][field]=Math.max(1,+inp.value||1);
+ });
+ state.settings.brandRules=rules;
+ saveSettings();recompute();toast('Calculation settings applied');
 }
 
 // Events
@@ -324,9 +373,10 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_4_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_4_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_5_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_5_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
-$('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings={...E.DEFAULT_SETTINGS};state.qtyOverrides.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
+$('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
+$('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.qtyOverrides.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
 
 populateFilters();renderDashboard();renderPlanner();
 })();
