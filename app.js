@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const E=window.PurchaseEngine;
-let state={products:[],computed:[],filtered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),activeView:'dashboard'};
+let state={products:[],computed:[],filtered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),activeView:'dashboard'};
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -14,6 +14,13 @@ function saveSettings(){localStorage.setItem('purchaseSettingsV2',JSON.stringify
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),2600);}
 function cover(x){return x===Infinity?'∞':fmt(x,1);}
 function ratio(x){return x===Infinity?'∞':Number.isFinite(x)?x.toFixed(2):'—';}
+function plannerQty(p){const v=state.qtyOverrides.get(p._id);return v===undefined?p.suggestedQty:v;}
+function setPlannerQty(p,value){
+ const parsed=Number(value);const qty=Number.isFinite(parsed)?Math.max(0,Math.round(parsed)):p.suggestedQty;
+ if(qty===p.suggestedQty)state.qtyOverrides.delete(p._id);else state.qtyOverrides.set(p._id,qty);
+ return qty;
+}
+function totalPlannerQty(rows){return rows.reduce((s,p)=>s+plannerQty(p),0);}
 
 function setView(name){
  state.activeView=name;
@@ -38,7 +45,7 @@ async function handleFile(file){
  try{
   $('fileChip').textContent='Reading '+file.name+'…';
   const parsed=await readFile(file);
-  state.products=parsed.products;state.reportDate=parsed.reportDate;state.map=parsed.map;state.fileName=file.name;state.selected.clear();state.page=1;
+  state.products=parsed.products;state.reportDate=parsed.reportDate;state.map=parsed.map;state.fileName=file.name;state.selected.clear();state.qtyOverrides.clear();state.page=1;
   recompute();
   $('fileChip').textContent=file.name;
   $('reportMeta').textContent=`${fmt(state.products.length)} products • Data as of ${dateFmt(state.reportDate)} • Smart month-by-month + purchase-history analysis`;
@@ -75,7 +82,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.3`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.4`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -140,7 +147,7 @@ function renderDashboard(){
  $('kpiWait').textContent=fmt(count(p=>p.condition==='WAIT INCOMING'));
  $('kpiFast').textContent=fmt(count(p=>p.movement==='FAST MOVING'));
  $('kpiDead').textContent=fmt(count(p=>p.condition==='DEAD STOCK'));
- $('kpiSuggested').textContent=fmt(state.filtered.reduce((s,p)=>s+p.suggestedQty,0));
+ $('kpiSuggested').textContent=fmt(totalPlannerQty(state.filtered));
  const statuses=['CRITICAL ORDER','REORDER SOON','WAIT INCOMING','OK','OVERSTOCK','DORMANT / REVIEW','ONE-TIME / REVIEW','DEAD STOCK'];
  const max=Math.max(1,...statuses.map(s=>count(p=>p.condition===s)));
  $('statusBars').innerHTML=statuses.map(s=>{const c=count(p=>p.condition===s);return `<div class="status-line"><span>${esc(s)}</span><div class="bar"><span class="bar-${conditionClass(s)}" style="width:${(c/max)*100}%"></span></div><strong class="num">${fmt(c)}</strong></div>`}).join('');
@@ -153,22 +160,24 @@ function confidenceClass(s){return s==='HIGH'?'confidence-high':s==='MEDIUM'?'co
 function patternClass(s){if(s==='REGULAR')return'ok';if(s==='RISING')return'fast';if(s==='FALLING')return'reorder';if(s==='INTERMITTENT')return'wait';if(s==='DEAD STOCK')return'dead';if(s==='DORMANT')return'dormant';if(s==='ONE-TIME SPIKE')return'spike';return'review';}
 
 function renderCompactTable(el,rows){
- el.innerHTML=`<thead><tr><th>Internal Ref</th><th>Add Description</th><th>Make</th><th>OEM</th><th>Brand</th><th class="num">All Company</th><th class="num">On Way</th><th class="num">On Way 2</th><th>Demand Pattern</th><th class="num">Demand / Mo</th><th class="num">Active Months</th><th class="num">Purchase Qty</th><th>Same OEM Other Brands</th><th class="num">Cover</th><th>Condition</th><th class="num">Suggested Qty</th><th>Action</th></tr></thead><tbody>${rows.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.make||'UNKNOWN')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.allCompany)}</td><td class="num">${fmt(p.onWay)}</td><td class="num">${fmt(p.onWay2)}</td><td><span class="badge ${patternClass(p.demandPattern)}">${esc(p.demandPattern)}</span></td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${p.activeMonths}/${p.monthCount}</td><td class="num">${fmt(p.totalPurchase)}</td><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.equivalentNote)}</button></td><td class="num">${cover(p.currentCover)}</td><td><span class="badge ${conditionClass(p.condition)}">${esc(p.condition)}</span></td><td class="num qty">${fmt(p.suggestedQty)}</td><td>${esc(p.action)}</td></tr>`).join('')||'<tr><td colspan="17" class="empty">No items match the current filters.</td></tr>'}</tbody>`;
+ el.innerHTML=`<thead><tr><th>Internal Ref</th><th>Add Description</th><th>Make</th><th>OEM</th><th>Brand</th><th class="num">All Company</th><th class="num">On Way</th><th class="num">On Way 2</th><th>Demand Pattern</th><th class="num">Demand / Mo</th><th class="num">Active Months</th><th class="num">Purchase Qty</th><th>Same OEM Other Brands</th><th class="num">Cover</th><th>Condition</th><th class="num">Suggested Qty</th><th>Action</th></tr></thead><tbody>${rows.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.make||'UNKNOWN')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.allCompany)}</td><td class="num">${fmt(p.onWay)}</td><td class="num">${fmt(p.onWay2)}</td><td><span class="badge ${patternClass(p.demandPattern)}">${esc(p.demandPattern)}</span></td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${p.activeMonths}/${p.monthCount}</td><td class="num">${fmt(p.totalPurchase)}</td><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.equivalentNote)}</button></td><td class="num">${cover(p.currentCover)}</td><td><span class="badge ${conditionClass(p.condition)}">${esc(p.condition)}</span></td><td class="num qty">${fmt(plannerQty(p))}</td><td>${esc(p.action)}</td></tr>`).join('')||'<tr><td colspan="17" class="empty">No items match the current filters.</td></tr>'}</tbody>`;
  bindDetailLinks(el);
 }
 
 const plannerColumns=[
  ['internalRef','Internal Ref'],['description','Add Description'],['make','Make'],['oem','OEM'],['brand','Brand'],['brandPartNo','Brand Part No.'],
+ ['suggestedQty','Suggested Qty (Editable)'],['action','Purchase Action'],
  ['allCompany','All Company Qty'],['onWay','On Way'],['onWay2','On Way 2'],['totalSales','Sales Qty'],['salesCount','Sales Count'],['activeMonths','Sales Months'],
  ['avgMonthlySales','Overall Avg'],['recent3Avg','Recent 3M'],['recent6Avg','Recent 6M'],['demandRate','Smart Demand'],['demandPattern','Demand Pattern'],['demandConfidence','Confidence'],
  ['totalPurchase','Purchase Qty'],['purchaseCount','Purchase Count'],['purchaseSalesRatio','Purch/Sales'],['purchaseSignal','Purchase Signal'],
- ['equivalentNote','Same OEM Other Brands'],['currentCover','Current Cover'],['pipelineCover','Pipeline Cover'],['condition','Stock Condition'],['priority','Priority'],['suggestedQty','Suggested Purchase'],['action','Purchase Action']
+ ['equivalentNote','Same OEM Other Brands'],['currentCover','Current Cover'],['pipelineCover','Pipeline Cover'],['condition','Stock Condition'],['priority','Priority']
 ];
 function plannerCell(p,k){
  let v=p[k];
  if(k==='internalRef')return`<td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(v||'—')}</button></td>`;
  if(k==='description')return`<td class="desc" title="${esc(v)}">${esc(v||'—')}</td>`;
- if(['allCompany','onWay','onWay2','totalSales','salesCount','totalPurchase','purchaseCount','suggestedQty'].includes(k))return`<td class="num ${k==='suggestedQty'?'qty':''}">${fmt(v)}</td>`;
+ if(k==='suggestedQty'){const q=plannerQty(p),modified=state.qtyOverrides.has(p._id);return`<td class="num qty-cell"><input class="qty-edit ${modified?'modified':''}" type="number" min="0" step="1" value="${q}" data-id="${esc(p._id)}" data-calculated="${p.suggestedQty}" title="Calculated suggestion: ${p.suggestedQty}. Edit this quantity before exporting."></td>`;}
+ if(['allCompany','onWay','onWay2','totalSales','salesCount','totalPurchase','purchaseCount'].includes(k))return`<td class="num">${fmt(v)}</td>`;
  if(k==='activeMonths')return`<td class="num">${p.activeMonths}/${p.monthCount}</td>`;
  if(['avgMonthlySales','recent3Avg','recent6Avg','demandRate'].includes(k))return`<td class="num">${fmt(v,1)}</td>`;
  if(['currentCover','pipelineCover'].includes(k))return`<td class="num">${cover(v)}</td>`;
@@ -187,20 +196,21 @@ function renderPlanner(){
  const sorted=[...state.filtered].sort((a,b)=>sortCompare(a,b,state.sortKey,state.sortDir));
  const pages=Math.max(1,Math.ceil(sorted.length/state.pageSize));state.page=Math.min(state.page,pages);
  const start=(state.page-1)*state.pageSize,rows=sorted.slice(start,start+state.pageSize);
- $('plannerResults').textContent=`${fmt(sorted.length)} items • ${fmt(sorted.reduce((s,p)=>s+p.suggestedQty,0))} pcs suggested`;
+ $('plannerResults').textContent=`${fmt(sorted.length)} items • ${fmt(totalPlannerQty(sorted))} pcs planned`;
  $('pageInfo').textContent=`Page ${state.page} of ${pages} • showing ${rows.length}`;
  $('prevPage').disabled=state.page<=1;$('nextPage').disabled=state.page>=pages;
  $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="30" class="empty">No items match filters.</td></tr>'}</tbody>`;
  $('plannerTable').querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{const k=th.dataset.sort;if(state.sortKey===k)state.sortDir*=-1;else{state.sortKey=k;state.sortDir=1;}renderPlanner();});
  $('plannerTable').querySelectorAll('.row-select').forEach(cb=>cb.onchange=()=>{cb.checked?state.selected.add(cb.dataset.id):state.selected.delete(cb.dataset.id);updateSelectedButton();});
+ $('plannerTable').querySelectorAll('.qty-edit').forEach(inp=>{inp.onfocus=()=>inp.select();inp.onchange=()=>{const p=state.computed.find(x=>x._id===inp.dataset.id);if(!p)return;const q=setPlannerQty(p,inp.value);inp.value=q;inp.classList.toggle('modified',state.qtyOverrides.has(p._id));$('plannerResults').textContent=`${fmt(state.filtered.length)} items • ${fmt(totalPlannerQty(state.filtered))} pcs planned`;$('kpiSuggested').textContent=fmt(totalPlannerQty(state.filtered));toast(q===p.suggestedQty?'Quantity reset to calculated suggestion':`Purchase quantity changed to ${fmt(q)}`);};});
  const sp=$('selectPage');if(sp)sp.onchange=()=>{rows.forEach(p=>sp.checked?state.selected.add(p._id):state.selected.delete(p._id));renderPlanner();updateSelectedButton();};
  bindDetailLinks($('plannerTable'));updateSelectedButton();
 }
-function sortCompare(a,b,k,d){let av=a[k],bv=b[k];if(typeof av==='string'||typeof bv==='string')return String(av??'').localeCompare(String(bv??''))*d;av=Number.isFinite(av)?av:-Infinity;bv=Number.isFinite(bv)?bv:-Infinity;return(av-bv)*d;}
+function sortCompare(a,b,k,d){let av=k==='suggestedQty'?plannerQty(a):a[k],bv=k==='suggestedQty'?plannerQty(b):b[k];if(typeof av==='string'||typeof bv==='string')return String(av??'').localeCompare(String(bv??''))*d;av=Number.isFinite(av)?av:-Infinity;bv=Number.isFinite(bv)?bv:-Infinity;return(av-bv)*d;}
 function updateSelectedButton(){$('exportSelected').disabled=state.selected.size===0;$('exportSelected').textContent=`Export Selected (${state.selected.size})`;}
 
 function brandSummary(){
- const m=new Map();state.computed.forEach(p=>{if(!m.has(p.brand))m.set(p.brand,{brand:p.brand,products:0,stock:0,fast:0,critical:0,reorder:0,wait:0,overstock:0,dead:0,review:0,suggested:0});const b=m.get(p.brand);b.products++;b.stock+=p.allCompany;b.fast+=p.movement==='FAST MOVING';b.critical+=p.condition==='CRITICAL ORDER';b.reorder+=p.condition==='REORDER SOON';b.wait+=p.condition==='WAIT INCOMING';b.overstock+=p.condition==='OVERSTOCK';b.dead+=p.condition==='DEAD STOCK';b.review+=['DORMANT / REVIEW','ONE-TIME / REVIEW','NO SALES / REVIEW'].includes(p.condition);b.suggested+=p.suggestedQty;});return[...m.values()].sort((a,b)=>b.suggested-a.suggested||b.critical-a.critical||a.brand.localeCompare(b.brand));
+ const m=new Map();state.computed.forEach(p=>{if(!m.has(p.brand))m.set(p.brand,{brand:p.brand,products:0,stock:0,fast:0,critical:0,reorder:0,wait:0,overstock:0,dead:0,review:0,suggested:0});const b=m.get(p.brand);b.products++;b.stock+=p.allCompany;b.fast+=p.movement==='FAST MOVING';b.critical+=p.condition==='CRITICAL ORDER';b.reorder+=p.condition==='REORDER SOON';b.wait+=p.condition==='WAIT INCOMING';b.overstock+=p.condition==='OVERSTOCK';b.dead+=p.condition==='DEAD STOCK';b.review+=['DORMANT / REVIEW','ONE-TIME / REVIEW','NO SALES / REVIEW'].includes(p.condition);b.suggested+=plannerQty(p);});return[...m.values()].sort((a,b)=>b.suggested-a.suggested||b.critical-a.critical||a.brand.localeCompare(b.brand));
 }
 function renderBrands(){
  if(!state.computed.length){$('brandGrid').innerHTML='<div class="empty">Upload data to analyse brands.</div>';$('brandTable').innerHTML='';return;}
@@ -263,17 +273,34 @@ function exportRows(rows,name){
     'Sales Qty':p.totalSales,'Sales Count':p.salesCount,'Active Sales Months':`${p.activeMonths}/${p.monthCount}`,'Overall Avg / Mo':+p.avgMonthlySales.toFixed(2),'Recent 3M Avg':+p.recent3Avg.toFixed(2),'Recent 6M Avg':+p.recent6Avg.toFixed(2),'Smart Demand / Mo':+p.demandRate.toFixed(2),'Demand Pattern':p.demandPattern,'Demand Confidence':p.demandConfidence,'Last Sale Date':dateFmt(p.lastSaleDate),'Last Sale Age Months':p.lastSaleAgeMonths===null?'':+p.lastSaleAgeMonths.toFixed(2),'Zero Sales Streak Months':p.zeroSalesStreakMonths,'Inactivity Age Months':p.inactivityAgeMonths===null?'':+p.inactivityAgeMonths.toFixed(2),'Inactivity Basis':p.inactivityBasis,
     'Historical Purchase Qty':p.totalPurchase,'Purchase Count':p.purchaseCount,'Last Purchase Date':dateFmt(p.lastPurchaseDate),'Purchase/Sales Ratio':p.purchaseSalesRatio===Infinity?'INF':+p.purchaseSalesRatio.toFixed(2),'Purchase Signal':p.purchaseSignal,
     'Same OEM Other Brand Stock':p.otherStock,'Same OEM Other Brand On Way':p.otherOnWay,'Same OEM Other Brand On Way 2':p.otherOnWay2,'Same OEM Detail':p.equivalentNote,
-    'Current Months Cover':p.currentCover===Infinity?'INF':+p.currentCover.toFixed(2),'Pipeline Months Cover':p.pipelineCover===Infinity?'INF':+p.pipelineCover.toFixed(2),'Stock Condition':p.condition,'Priority':p.priority,'Target Gap Qty':p.targetGapQty,'Suggested Purchase Qty':p.suggestedQty,'Purchase Action':p.action,'Reason':p.reason
+    'Current Months Cover':p.currentCover===Infinity?'INF':+p.currentCover.toFixed(2),'Pipeline Months Cover':p.pipelineCover===Infinity?'INF':+p.pipelineCover.toFixed(2),'Stock Condition':p.condition,'Priority':p.priority,'Target Gap Qty':p.targetGapQty,'Suggested Purchase Qty':plannerQty(p),'Purchase Action':p.action,'Reason':p.reason
    };
    months.forEach((m,i)=>out[`${m} Sales`]=p.monthly[i]||0);return out;
   });
  const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Purchase Suggestions');XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} rows`);
 }
 
+function exportSelectedPurchase(rows,name){
+ if(!rows.length){toast('Nothing selected to export');return;}
+ const data=rows.map(p=>({
+  'Old Number':p.internalRef,
+  'OEM No Space':p.oemKey||E.normalizeOEM(p.oem),
+  'Add Description':p.description,
+  'Available Quantity':p.allCompany,
+  'Total Incoming Quantity':p.onWay+p.onWay2,
+  'Suggested Quantity':plannerQty(p)
+ }));
+ const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();
+ ws['!cols']=[{wch:28},{wch:22},{wch:48},{wch:18},{wch:22},{wch:18}];
+ XLSX.utils.book_append_sheet(wb,ws,'Selected Purchase');
+ XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} selected items`);
+}
+
 function syncSettingsUI(){
  const s=state.settings;$('sTarget').value=s.targetCover;$('sSafety').value=s.safetyCover;$('sCritical').value=s.criticalCover;$('sReorder').value=s.reorderCover;$('sOverstock').value=s.overstockCover;$('sDormant').value=s.dormantMonths;$('sDead').value=s.deadStockMonths;$('sFast').value=s.fastRate;$('sMedium').value=s.mediumRate;$('sSpike').value=s.spikeDominancePct;$('sRegular').value=s.regularActivePct;$('sEquivalent').value=s.equivalentCreditPct;$('sDemand').value=s.demandMethod;$('sSuggestionMode').value=s.suggestionMode;
 }
 function applySettingsFromUI(){
+ state.qtyOverrides.clear();
  state.settings.targetCover=+$('sTarget').value;state.settings.safetyCover=+$('sSafety').value;state.settings.criticalCover=+$('sCritical').value;state.settings.reorderCover=+$('sReorder').value;state.settings.overstockCover=+$('sOverstock').value;state.settings.dormantMonths=+$('sDormant').value;state.settings.deadStockMonths=+$('sDead').value;state.settings.fastRate=+$('sFast').value;state.settings.mediumRate=+$('sMedium').value;state.settings.spikeDominancePct=+$('sSpike').value;state.settings.regularActivePct=+$('sRegular').value;state.settings.equivalentCreditPct=+$('sEquivalent').value;state.settings.demandMethod=$('sDemand').value;state.settings.suggestionMode=$('sSuggestionMode').value;saveSettings();recompute();toast('Calculation settings applied');
 }
 
@@ -297,9 +324,9 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_3_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportRows(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Suggestions_v2_3_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_4_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_4_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
-$('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings={...E.DEFAULT_SETTINGS};saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
+$('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings={...E.DEFAULT_SETTINGS};state.qtyOverrides.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
 
 populateFilters();renderDashboard();renderPlanner();
 })();

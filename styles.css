@@ -70,3 +70,10 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 
 @media(max-width:1450px){.search-field,.desc-field{grid-column:span 1}}
 @media(max-width:900px){.search-field,.desc-field{grid-column:span 1}}
+
+
+/* v2.4 purchase-planner quantity editing */
+.qty-cell{min-width:118px}
+.qty-edit{width:88px;border:1px solid #cfbfd0;border-radius:8px;padding:6px 8px;text-align:right;font-weight:850;color:var(--purple);background:#fff;font-variant-numeric:tabular-nums;outline:0}
+.qty-edit:focus{border-color:#8a5878;box-shadow:0 0 0 3px var(--purple-soft)}
+.qty-edit.modified{background:#fff5cc;border-color:#d9b94e;color:#745800}

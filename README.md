@@ -1,38 +1,18 @@
-# TiBAO Purchase Intelligence — Web Prototype v2.3
+# TiBAO Purchase Intelligence v2.4
 
-Static browser-based proof-of-concept for the future Odoo Purchase Support module.
+GitHub Pages browser-only purchase support prototype.
 
-## What v2.3 adds
-- Supports the latest Odoo Purchase Support export header layout (`Product ID`, `Internal Ref`, `Main OEM`, `Motorline`, `Bavaria`, `Tibao SHJ`, `All Company (Core)`, `Jan`-`Dec`, `Total Qty`, `Invoices`, `Last Sale`, `Received Qty`, `Receipts`, `Last Purchase`, and the 8 On Way / On Way 2 fields).
-- Still accepts the previous longer header names for backward compatibility.
-- Blank future months are safely ignored using the report date detected from the report title / Report Till Date field.
-- Brand and Condition filters are multi-select.
-- Add Description contains-search (for example `water pump`).
-- Make filter derives vehicle make from the Internal Ref when there is no Odoo Make column.
-- Incoming calculation prefers the three company-level On Way fields; Group totals are used only as fallback.
-- Negative incoming values are protected from purchase calculations and flagged in Data Quality.
+## v2.4 changes
+- Purchase Planner **Suggested Qty is editable**. The calculated suggestion is loaded as the default; purchaser can change it before export.
+- Suggested Qty and Purchase Action are moved immediately after Brand Part No.
+- `Export Selected` now creates a clean purchase Excel containing only:
+  1. Old Number
+  2. OEM No Space
+  3. Add Description
+  4. Available Quantity
+  5. Total Incoming Quantity (On Way + On Way 2)
+  6. Suggested Quantity (including purchaser edits)
+- `Export Filtered` / top `Export Suggestions` still keep the detailed analytical export.
 
-## Confirmed make-code mapping
-- VW → VW
-- BENZ → BENZ
-- BMW → BMW
-- ROV / LR → LAND ROVER
-- TY → TOYOTA
-- BE → BENTLEY
-- P / PO → PORSCHE
-- SKD → SKODA
-- AD → AUDI
-- UN → UNIVERSAL
-- HY → HYUNDAI
-- JE → JEEP
-
-Additional aliases observed clearly in the current export are also recognized: AU → AUDI, JA → JAGUAR, HO → HONDA, SK → SKODA, OP → OPEL, MZ → MAZDA, MI → MITSUBISHI, MAS → MASERATI, WV → VW, JEEP → JEEP.
-
-## GitHub Pages update
-Replace these files in the existing repository root:
-1. `index.html`
-2. `engine.js`
-3. `app.js`
-4. `styles.css`
-
-Commit the changes, wait for GitHub Pages to redeploy, then press `Ctrl + F5` and confirm the top badge says `Logic v2.3`.
+## GitHub update
+Replace `index.html`, `app.js`, `engine.js`, and `styles.css` in the existing repository, commit, wait for GitHub Pages to deploy, then hard-refresh with Ctrl+F5.
