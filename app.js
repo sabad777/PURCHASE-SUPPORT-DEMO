@@ -92,7 +92,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.5`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.6`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -146,6 +146,9 @@ function applyFilters(){
   if(q){const hay=[p.internalRef,p.oem,p.brand,p.brandPartNo,p.make,p.category].join(' ').toLowerCase();if(!hay.includes(q))return false;}
   return true;
  });
+ // Keep selections strictly inside the current filtered result.
+ const visibleIds=new Set(state.filtered.map(p=>p._id));
+ [...state.selected].forEach(id=>{if(!visibleIds.has(id))state.selected.delete(id);});
  state.page=1;renderDashboard();renderPlanner();
 }
 function count(fn){return state.filtered.filter(fn).length;}
@@ -211,15 +214,33 @@ function renderPlanner(){
  $('plannerResults').textContent=`${fmt(sorted.length)} items • ${fmt(totalPlannerQty(sorted))} pcs planned`;
  $('pageInfo').textContent=`Page ${state.page} of ${pages} • showing ${rows.length}`;
  $('prevPage').disabled=state.page<=1;$('nextPage').disabled=state.page>=pages;
- $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','leadTimeDays','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="30" class="empty">No items match filters.</td></tr>'}</tbody>`;
+ $('plannerTable').innerHTML=`<thead><tr><th><input type="checkbox" id="selectPage" title="Select all currently filtered items"></th>${plannerColumns.map(([k,l])=>`<th data-sort="${k}" class="${['allCompany','onWay','onWay2','leadTimeDays','totalSales','salesCount','activeMonths','avgMonthlySales','recent3Avg','recent6Avg','demandRate','totalPurchase','purchaseCount','purchaseSalesRatio','currentCover','pipelineCover','priority','suggestedQty'].includes(k)?'num':''}">${esc(l)}${state.sortKey===k?(state.sortDir>0?' ↑':' ↓'):''}</th>`).join('')}</tr></thead><tbody>${rows.map(p=>`<tr><td><input class="row-select" type="checkbox" data-id="${esc(p._id)}" ${state.selected.has(p._id)?'checked':''}></td>${plannerColumns.map(([k])=>plannerCell(p,k)).join('')}</tr>`).join('')||'<tr><td colspan="30" class="empty">No items match filters.</td></tr>'}</tbody>`;
  $('plannerTable').querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{const k=th.dataset.sort;if(state.sortKey===k)state.sortDir*=-1;else{state.sortKey=k;state.sortDir=1;}renderPlanner();});
  $('plannerTable').querySelectorAll('.row-select').forEach(cb=>cb.onchange=()=>{cb.checked?state.selected.add(cb.dataset.id):state.selected.delete(cb.dataset.id);updateSelectedButton();});
  $('plannerTable').querySelectorAll('.qty-edit').forEach(inp=>{inp.onfocus=()=>inp.select();inp.onchange=()=>{const p=state.computed.find(x=>x._id===inp.dataset.id);if(!p)return;const q=setPlannerQty(p,inp.value);inp.value=q;inp.classList.toggle('modified',state.qtyOverrides.has(p._id));$('plannerResults').textContent=`${fmt(state.filtered.length)} items • ${fmt(totalPlannerQty(state.filtered))} pcs planned`;$('kpiSuggested').textContent=fmt(totalPlannerQty(state.filtered));toast(q===p.suggestedQty?'Quantity reset to calculated suggestion':`Purchase quantity changed to ${fmt(q)}`);};});
- const sp=$('selectPage');if(sp)sp.onchange=()=>{rows.forEach(p=>sp.checked?state.selected.add(p._id):state.selected.delete(p._id));renderPlanner();updateSelectedButton();};
+ const sp=$('selectPage');if(sp){
+ const selectedInFilter=state.filtered.reduce((n,p)=>n+(state.selected.has(p._id)?1:0),0);
+ sp.title='Select all currently filtered items';
+ sp.checked=state.filtered.length>0&&selectedInFilter===state.filtered.length;
+ sp.indeterminate=selectedInFilter>0&&selectedInFilter<state.filtered.length;
+ sp.onchange=()=>{
+  state.selected.clear();
+  if(sp.checked)state.filtered.forEach(p=>state.selected.add(p._id));
+  renderPlanner();updateSelectedButton();
+ };
+}
  bindDetailLinks($('plannerTable'));updateSelectedButton();
 }
 function sortCompare(a,b,k,d){let av=k==='suggestedQty'?plannerQty(a):a[k],bv=k==='suggestedQty'?plannerQty(b):b[k];if(av instanceof Date||bv instanceof Date){av=av instanceof Date?av.getTime():-Infinity;bv=bv instanceof Date?bv.getTime():-Infinity;return(av-bv)*d;}if(typeof av==='string'||typeof bv==='string')return String(av??'').localeCompare(String(bv??''))*d;av=Number.isFinite(av)?av:-Infinity;bv=Number.isFinite(bv)?bv:-Infinity;return(av-bv)*d;}
-function updateSelectedButton(){$('exportSelected').disabled=state.selected.size===0;$('exportSelected').textContent=`Export Selected (${state.selected.size})`;}
+function updateSelectedButton(){
+ const n=state.selected.size;
+ $('exportSelected').disabled=n===0;
+ $('exportSelected').textContent=`Export Selected (${n})`;
+ if($('clearSelection')){
+  $('clearSelection').disabled=n===0;
+  $('clearSelection').textContent=n?`Clear Selection (${n})`:'Clear Selection';
+ }
+}
 
 function brandSummary(){
  const m=new Map();state.computed.forEach(p=>{if(!m.has(p.brand))m.set(p.brand,{brand:p.brand,products:0,stock:0,fast:0,critical:0,reorder:0,wait:0,overstock:0,dead:0,review:0,suggested:0});const b=m.get(p.brand);b.products++;b.stock+=p.allCompany;b.fast+=p.movement==='FAST MOVING';b.critical+=p.condition==='CRITICAL ORDER';b.reorder+=p.condition==='REORDER SOON';b.wait+=p.condition==='WAIT INCOMING';b.overstock+=p.condition==='OVERSTOCK';b.dead+=p.condition==='DEAD STOCK';b.review+=['DORMANT / REVIEW','ONE-TIME / REVIEW','NO SALES / REVIEW'].includes(p.condition);b.suggested+=plannerQty(p);});return[...m.values()].sort((a,b)=>b.suggested-a.suggested||b.critical-a.critical||a.brand.localeCompare(b.brand));
@@ -373,7 +394,8 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_5_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.computed.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_5_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_6_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_6_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('clearSelection').onclick=()=>{state.selected.clear();renderPlanner();updateSelectedButton();toast('Selection cleared');};
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
 $('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.qtyOverrides.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};

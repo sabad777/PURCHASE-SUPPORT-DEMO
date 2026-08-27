@@ -10,7 +10,7 @@
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2.5</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2.6</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
@@ -25,7 +25,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="version-chip">Logic v2.5</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v2.6</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
 
     <div class="content">
@@ -76,7 +76,7 @@
 
         <div class="grid-2">
           <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Make / Description / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
-          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2.5</div></div><div class="panel-body"><div class="insights">
+          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2.6</div></div><div class="panel-body"><div class="insights">
             <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
             <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
             <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock stays separate</strong><span>All Company Qty + On Way + On Way 2 are visible individually and used in projected cover.</span></div></div>
@@ -91,7 +91,7 @@
 
       <section class="view" id="view-planner">
         <div class="panel">
-          <div class="table-toolbar"><div class="toolbar-left"><span class="results" id="plannerResults">0 items</span><button class="btn" id="exportFiltered">Export Filtered</button><button class="btn primary" id="exportSelected" disabled>Export Selected (0)</button><span class="results">Selected export: Old No. • OEM • Description • Available • Incoming • Qty</span></div><div class="toolbar-right"><label class="results">Rows</label><select id="pageSize" class="btn"><option>25</option><option selected>50</option><option>100</option><option>250</option></select></div></div>
+          <div class="table-toolbar"><div class="toolbar-left"><span class="results" id="plannerResults">0 items</span><button class="btn" id="exportFiltered">Export Filtered</button><button class="btn primary" id="exportSelected" disabled>Export Selected (0)</button><button class="btn" id="clearSelection" disabled>Clear Selection</button><span class="results">Select All = current filtered items only • Selected export: Old No. • OEM • Description • Available • Incoming • Qty</span></div><div class="toolbar-right"><label class="results">Rows</label><select id="pageSize" class="btn"><option>25</option><option selected>50</option><option>100</option><option>250</option></select></div></div>
           <div class="table-wrap"><table class="data-table planner-wide" id="plannerTable"></table></div>
           <div class="pager"><span class="results" id="pageInfo"></span><div><button class="btn" id="prevPage">Previous</button> <button class="btn" id="nextPage">Next</button></div></div>
         </div>

@@ -89,3 +89,6 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 .brand-rule-table .rule-input:focus{border-color:#8a5878;box-shadow:0 0 0 3px var(--purple-soft)}
 .rule-search{width:220px;max-width:35vw;border:1px solid var(--line);border-radius:9px;padding:8px 10px;outline:0}
 .rule-search:focus{border-color:#b48aa6;box-shadow:0 0 0 3px var(--purple-soft)}
+
+/* v2.6 filtered selection scope */
+#clearSelection:disabled{opacity:.45}

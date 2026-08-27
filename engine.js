@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v2.5 - calculation engine
+/* TiBAO Purchase Intelligence v2.6 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
