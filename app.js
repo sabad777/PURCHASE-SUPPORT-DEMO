@@ -92,7 +92,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.6`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.7`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -237,7 +237,7 @@ function updateSelectedButton(){
  $('exportSelected').disabled=n===0;
  $('exportSelected').textContent=`Export Selected (${n})`;
  if($('clearSelection')){
-  $('clearSelection').disabled=n===0;
+  $('clearSelection').disabled=false;
   $('clearSelection').textContent=n?`Clear Selection (${n})`:'Clear Selection';
  }
 }
@@ -394,8 +394,8 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_6_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_6_${dateFmt(state.reportDate||new Date())}.xlsx`);
-$('clearSelection').onclick=()=>{state.selected.clear();renderPlanner();updateSelectedButton();toast('Selection cleared');};
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_7_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_7_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('clearSelection').onclick=()=>{const had=state.selected.size;state.selected.clear();renderPlanner();updateSelectedButton();toast(had?'Selection cleared':'No items were selected');};
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
 $('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.qtyOverrides.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};

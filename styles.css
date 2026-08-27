@@ -91,4 +91,3 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 .rule-search:focus{border-color:#b48aa6;box-shadow:0 0 0 3px var(--purple-soft)}
 
 /* v2.6 filtered selection scope */
-#clearSelection:disabled{opacity:.45}

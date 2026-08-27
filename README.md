@@ -1,9 +1,20 @@
-# TiBAO Purchase Intelligence v2.6
+# TiBAO Purchase Intelligence v2.7
 
-- Selection is now limited to the current filtered result.
-- Header Select All selects every currently filtered item, not old/hidden selections and not just the current page.
-- Changing filters removes selections outside the new result.
-- Added Clear Selection button.
-- Export Selected exports only selected rows that are still in the current filtered result.
+Bug-fix release for Purchase Planner selection.
 
-Replace index.html, app.js, engine.js and styles.css in GitHub. Commit, wait for Pages, then Ctrl+F5.
+## Fixed
+- Clear Selection is always clickable.
+- Clear Selection shows the current selected count.
+- Selections remain restricted to the current filtered result.
+- Select All selects the complete current filtered result.
+- Added cache-busting (`?v=2.7`) to CSS and JavaScript references so GitHub Pages/browser caching cannot mix old and new versions.
+
+## GitHub update
+Replace all four files:
+- index.html
+- app.js
+- engine.js
+- styles.css
+
+Commit, wait for GitHub Pages to redeploy, then press Ctrl+F5.
+The page should show **Logic v2.7**.
