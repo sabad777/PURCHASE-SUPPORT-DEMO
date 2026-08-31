@@ -1,20 +1,16 @@
-# TiBAO Purchase Intelligence v2.7
+# TiBAO Purchase Intelligence v2.8
 
-Bug-fix release for Purchase Planner selection.
-
-## Fixed
-- Clear Selection is always clickable.
-- Clear Selection shows the current selected count.
-- Selections remain restricted to the current filtered result.
-- Select All selects the complete current filtered result.
-- Added cache-busting (`?v=2.7`) to CSS and JavaScript references so GitHub Pages/browser caching cannot mix old and new versions.
+## Changes
+- Purchase Planner now shows **Same OEM Other Brands** immediately after **Brand Part No.**
+- **Export Selected** now includes **Brand**.
+- Selected export columns are: Old Number, OEM No Space, Add Description, Brand, Available Quantity, Total Incoming Quantity, Suggested Quantity.
+- All V2.7 calculation logic remains unchanged.
 
 ## GitHub update
-Replace all four files:
+Replace these four files in the existing repository:
 - index.html
 - app.js
 - engine.js
 - styles.css
 
-Commit, wait for GitHub Pages to redeploy, then press Ctrl+F5.
-The page should show **Logic v2.7**.
+Commit, wait for GitHub Pages to deploy, then press Ctrl+F5. The page should show **Logic v2.8**.
