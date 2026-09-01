@@ -97,8 +97,8 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 .shj-note{margin-bottom:14px}
 .shj-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
 .shj-toolbar{display:grid;grid-template-columns:1.5fr repeat(3,minmax(150px,1fr)) auto auto auto;gap:10px;align-items:end;padding:14px;border-bottom:1px solid var(--line);background:#fbfcfe}
-.shj-toolbar .field input,.shj-toolbar .field select{width:100%;height:38px;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;color:var(--ink);outline:0}
-.shj-toolbar .field label{font-size:9px;text-transform:uppercase;font-weight:850;color:var(--muted);display:block;margin-bottom:5px}
+.shj-toolbar .field > input,.shj-toolbar .field > select{width:100%;height:38px;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;color:var(--ink);outline:0}
+.shj-toolbar .field > label{font-size:9px;text-transform:uppercase;font-weight:850;color:var(--muted);display:block;margin-bottom:5px}
 .shj-check{height:38px;display:flex;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:11px;white-space:nowrap}.shj-check input{accent-color:var(--purple)}
 .shj-summary-head{border-top:0}.shj-table{min-width:2350px}.shj-transfer-qty{font-weight:900;color:var(--purple);background:#fffafd}.shj-settings-panel{margin-top:16px}.shj-settings-grid{padding:14px}
 @media(max-width:1350px){.shj-kpis{grid-template-columns:repeat(3,1fr)}.shj-toolbar{grid-template-columns:repeat(3,1fr)}}
@@ -117,3 +117,14 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 #shjBrandMulti,#shjMakeMulti,#shjStatusMulti{width:100%}
 #shjBrandMulti .multi-menu,#shjMakeMulti .multi-menu,#shjStatusMulti .multi-menu{width:max(260px,100%);min-width:0}
 #shjBrandMulti .multi-trigger,#shjMakeMulti .multi-trigger,#shjStatusMulti .multi-trigger{font-size:12px}
+
+
+/* v3.2 SHJ filter visual fix + performance pager */
+#shjBrandFilterMenu .multi-option,#shjMakeFilterMenu .multi-option,#shjStatusFilterMenu .multi-option{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:7px;font-size:11px;line-height:1.25;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);cursor:pointer;margin:0}
+#shjBrandFilterMenu .multi-option input,#shjMakeFilterMenu .multi-option input,#shjStatusFilterMenu .multi-option input{width:13px;height:13px;min-width:13px;margin:0;padding:0;border:0;box-shadow:none;accent-color:var(--purple)}
+#shjBrandFilterMenu .multi-option span,#shjMakeFilterMenu .multi-option span,#shjStatusFilterMenu .multi-option span{font-size:11px;font-weight:700;color:#687489;text-transform:uppercase;letter-spacing:.015em}
+#shjBrandFilterMenu .multi-head,#shjMakeFilterMenu .multi-head,#shjStatusFilterMenu .multi-head{padding:7px 7px 5px}
+#shjBrandFilterMenu .multi-search,#shjMakeFilterMenu .multi-search{height:auto;width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:8px;font-size:11px}
+#shjBrandFilterMenu .multi-actions,#shjMakeFilterMenu .multi-actions,#shjStatusFilterMenu .multi-actions{gap:6px;margin-top:6px}
+#shjBrandFilterMenu .multi-actions button,#shjMakeFilterMenu .multi-actions button,#shjStatusFilterMenu .multi-actions button{font-size:9px;padding:5px 7px}
+.rows-control{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);white-space:nowrap}.rows-control select{border:1px solid var(--line);border-radius:8px;padding:7px 8px;background:#fff;color:var(--ink);font-weight:700}
