@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v2.8 - calculation engine
+/* TiBAO Purchase Intelligence v2.9 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -41,7 +41,13 @@
     applyOrderConstraints: false,
     defaultMOQ: 0,
     defaultOrderMultiple: 1,
-    brandRules: {}
+    brandRules: {},
+    shjSharePct: 25,
+    shjNormalCoverWeeks: 2,
+    shjFastCoverWeeks: 3,
+    shjMotorlineReserveMonths: 1.5,
+    shjUseBavariaBackup: true,
+    shjMinGroupDemand: 2.0
   };
 
   const HEADER_ALIASES = {

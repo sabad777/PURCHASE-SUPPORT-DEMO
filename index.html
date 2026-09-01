@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TiBAO Purchase Intelligence</title>
   <meta name="description" content="Browser-based purchase intelligence prototype for Odoo Excel exports.">
-  <link rel="stylesheet" href="styles.css?v=2.8">
+  <link rel="stylesheet" href="styles.css?v=2.9">
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2.8</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2.9</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
+      <button data-view="shj"><span class="icon">⇄</span><span class="label">SHJ Replenishment</span></button>
       <button data-view="brands"><span class="icon">◫</span><span class="label">Brand Analysis</span></button>
       <button data-view="quality"><span class="icon">✓</span><span class="label">Data Quality</span></button>
       <button data-view="settings"><span class="icon">⚙</span><span class="label">Settings</span></button>
@@ -25,7 +26,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="version-chip">Logic v2.8</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v2.9</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
 
     <div class="content">
@@ -76,7 +77,7 @@
 
         <div class="grid-2">
           <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Make / Description / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
-          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2.6</div></div><div class="panel-body"><div class="insights">
+          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2.9</div></div><div class="panel-body"><div class="insights">
             <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
             <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
             <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock stays separate</strong><span>All Company Qty + On Way + On Way 2 are visible individually and used in projected cover.</span></div></div>
@@ -94,6 +95,32 @@
           <div class="table-toolbar"><div class="toolbar-left"><span class="results" id="plannerResults">0 items</span><button class="btn" id="exportFiltered">Export Filtered</button><button class="btn primary" id="exportSelected" disabled>Export Selected (0)</button><button class="btn" id="clearSelection">Clear Selection</button><span class="results">Select All = current filtered items only • Selected export: Old No. • OEM • Description • Brand • Available • Incoming • Qty</span></div><div class="toolbar-right"><label class="results">Rows</label><select id="pageSize" class="btn"><option>25</option><option selected>50</option><option>100</option><option>250</option></select></div></div>
           <div class="table-wrap"><table class="data-table planner-wide" id="plannerTable"></table></div>
           <div class="pager"><span class="results" id="pageInfo"></span><div><button class="btn" id="prevPage">Previous</button> <button class="btn" id="nextPage">Next</button></div></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-shj">
+        <div class="settings-warning shj-note"><strong>Prototype stock-balancing model.</strong> The current Odoo Excel does not contain separate Sharjah sales. Until that data is available, this view estimates Sharjah demand from the product's overall smart demand, then checks SHJ stock, nearby Bavaria stock and safe Motorline excess. The final Odoo version should use actual SHJ sales history.</div>
+
+        <div class="shj-kpis">
+          <div class="kpi red"><div class="label">Urgent Transfer</div><div class="value" id="shjKpiUrgent">0</div><div class="hint">Fast mover + SHJ shortage</div></div>
+          <div class="kpi blue"><div class="label">Motorline Transfer</div><div class="value" id="shjKpiTransfer">0</div><div class="hint">Items to load on weekly vehicle</div></div>
+          <div class="kpi green"><div class="label">Use Bavaria Nearby</div><div class="value" id="shjKpiBavaria">0</div><div class="hint">Local backup can cover SHJ</div></div>
+          <div class="kpi amber"><div class="label">Purchase / Review</div><div class="value" id="shjKpiPurchase">0</div><div class="hint">Local shortage + no safe ML excess</div></div>
+          <div class="kpi purple"><div class="label">ML Transfer Qty</div><div class="value" id="shjKpiQty">0</div><div class="hint">Current filtered view</div></div>
+        </div>
+
+        <div class="panel">
+          <div class="shj-toolbar">
+            <div class="field"><label>Search</label><input id="shjSearch" placeholder="OEM, old number, description..." autocomplete="off"></div>
+            <div class="field"><label>Brand</label><select id="shjBrandFilter"><option value="">All Brands</option></select></div>
+            <div class="field"><label>Make</label><select id="shjMakeFilter"><option value="">All Makes</option></select></div>
+            <div class="field"><label>Status</label><select id="shjStatusFilter"><option value="">All Statuses</option></select></div>
+            <label class="shj-check"><input id="shjActionableOnly" type="checkbox" checked> Actionable only</label>
+            <button class="btn" id="shjClearFilters">Clear</button>
+            <button class="btn primary" id="exportShj">Export Replenishment</button>
+          </div>
+          <div class="panel-head shj-summary-head"><div><div class="panel-title">Sharjah Replenishment Suggestions</div><div class="panel-note" id="shjResults">0 items</div></div></div>
+          <div class="table-wrap"><table class="data-table shj-table" id="shjTable"></table></div>
         </div>
       </section>
 
@@ -136,6 +163,17 @@
           <div class="panel-head"><div><div class="panel-title">Brand Purchasing Rules</div><div class="panel-note">Set lead time per brand. MOQ and order multiple are optional; leave them at 0 / 1 when not applicable.</div></div><input id="brandRuleSearch" class="rule-search" placeholder="Search brand..." autocomplete="off"></div>
           <div class="table-wrap brand-rule-wrap"><table class="data-table brand-rule-table" id="brandRulesTable"></table></div>
         </div>
+        <div class="panel shj-settings-panel">
+          <div class="panel-head"><div><div class="panel-title">SHJ Replenishment Settings</div><div class="panel-note">Temporary stock-balancing assumptions until actual Sharjah monthly sales are available in Odoo.</div></div></div>
+          <div class="settings-grid shj-settings-grid">
+            <div class="setting-card"><h3>Estimated SHJ share</h3><input id="sShjShare" type="number" step="5" min="0" max="100"><p>Temporary percentage of overall smart demand assumed to belong to Sharjah.</p></div>
+            <div class="setting-card"><h3>Normal SHJ cover</h3><input id="sShjNormalWeeks" type="number" step="0.5" min="0"><p>Target weeks kept locally for non-fast movers. Weekly transfers mean this can stay low.</p></div>
+            <div class="setting-card"><h3>Fast-mover SHJ cover</h3><input id="sShjFastWeeks" type="number" step="0.5" min="0"><p>Extra local cover for products moving quickly overall.</p></div>
+            <div class="setting-card"><h3>Motorline reserve</h3><input id="sShjMLReserve" type="number" step="0.1" min="0"><p>Estimated months of Motorline demand that must remain before stock is transferred out.</p></div>
+            <div class="setting-card"><h3>Bavaria as nearby backup</h3><select id="sShjBavaria"><option value="on">Yes — use Bavaria first</option><option value="off">No — ignore Bavaria stock</option></select><p>Bavaria is close to Sharjah, so its stock can cover the local requirement before requesting Motorline transfer.</p></div>
+            <div class="setting-card"><h3>Minimum group demand</h3><input id="sShjMinDemand" type="number" step="0.1" min="0"><p>Do not recommend SHJ stocking below this overall smart-demand rate; low-demand items stay for review.</p></div>
+          </div>
+        </div>
         <div class="settings-actions"><button class="btn primary" id="applySettings">Apply Settings</button> <button class="btn" id="resetSettings">Reset Defaults</button></div>
       </section>
     </div>
@@ -146,7 +184,7 @@
 <div class="toast hidden" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="engine.js?v=2.8"></script>
-<script src="app.js?v=2.8"></script>
+<script src="engine.js?v=2.9"></script>
+<script src="app.js?v=2.9"></script>
 </body>
 </html>

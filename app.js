@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const E=window.PurchaseEngine;
-let state={products:[],computed:[],filtered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),activeView:'dashboard'};
+let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),activeView:'dashboard'};
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -36,9 +36,9 @@ function setView(name){
  state.activeView=name;
  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
- const titles={dashboard:'Purchase Support',planner:'Purchase Planner',brands:'Brand Analysis',quality:'Data Quality',settings:'Calculation Settings'};
+ const titles={dashboard:'Purchase Support',planner:'Purchase Planner',shj:'SHJ Replenishment',brands:'Brand Analysis',quality:'Data Quality',settings:'Calculation Settings'};
  $('pageTitle').textContent=titles[name]||'Purchase Support';
- if(name==='planner')renderPlanner();if(name==='brands')renderBrands();if(name==='quality')renderQuality();if(name==='settings')syncSettingsUI();
+ if(name==='planner')renderPlanner();if(name==='shj')renderShj();if(name==='brands')renderBrands();if(name==='quality')renderQuality();if(name==='settings')syncSettingsUI();
 }
 function showUploadZone(show){$('uploadZone').classList.toggle('hidden',!show);}
 
@@ -92,9 +92,9 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.8`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v2.9`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
-function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());populateFilters();applyFilters();renderDashboard();renderPlanner();renderBrands();renderQuality();}
+function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());state.shjRows=calculateShjRows();populateFilters();populateShjFilters();applyFilters();applyShjFilters();renderDashboard();renderPlanner();renderShj();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
 function fillSelect(id,values,label){const el=$(id),cur=el.value;el.innerHTML=`<option value="">${label}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(values.includes(cur))el.value=cur;}
 
@@ -242,6 +242,75 @@ function updateSelectedButton(){
  }
 }
 
+function calculateShjRows(){
+ const s=state.settings,share=Math.max(0,Math.min(100,+s.shjSharePct||0))/100;
+ const weeksPerMonth=4.345;
+ return state.computed.map(p=>{
+  const demand=Math.max(0,p.demandRate||0);
+  const estShjDemand=demand*share;
+  const estMotorlineDemand=demand*Math.max(0,1-share);
+  const targetWeeks=p.movement==='FAST MOVING'?Math.max(0,+s.shjFastCoverWeeks||0):Math.max(0,+s.shjNormalCoverWeeks||0);
+  const targetQty=estShjDemand>0?Math.ceil(estShjDemand*(targetWeeks/weeksPerMonth)):0;
+  const shjGap=Math.max(0,targetQty-Math.max(0,p.tibaoStock||0));
+  const bavariaAvailable=s.shjUseBavariaBackup?Math.max(0,p.bavariaStock||0):0;
+  const fromBavaria=Math.min(shjGap,bavariaAvailable);
+  const afterBavaria=Math.max(0,shjGap-fromBavaria);
+  const mlReserveQty=Math.ceil(estMotorlineDemand*Math.max(0,+s.shjMotorlineReserveMonths||0));
+  const mlExcess=Math.max(0,Math.max(0,p.motorlineStock||0)-mlReserveQty);
+  const fromMotorline=Math.min(afterBavaria,mlExcess);
+  const remainingShortage=Math.max(0,afterBavaria-fromMotorline);
+  const reviewPattern=['DEAD STOCK','DORMANT','ONE-TIME SPIKE','NO SALES'].includes(p.demandPattern)||demand<Math.max(0,+s.shjMinGroupDemand||0);
+  let shjStatus='SHJ STOCK OK',shjAction='NO TRANSFER';
+  if(reviewPattern){shjStatus='REVIEW DEMAND';shjAction='NO AUTOMATIC TRANSFER';}
+  else if(shjGap<=0){shjStatus='SHJ STOCK OK';shjAction='NO TRANSFER';}
+  else if(fromBavaria>=shjGap){shjStatus='USE BAVARIA STOCK';shjAction=`MOVE ${fromBavaria} FROM BAVARIA`;}
+  else if(fromMotorline>0&&remainingShortage>0){shjStatus='PARTIAL TRANSFER / REVIEW';shjAction=`ML ${fromMotorline}${fromBavaria?` + BAV ${fromBavaria}`:''}; SHORT ${remainingShortage}`;}
+  else if(fromMotorline>0&&p.tibaoStock<=0&&p.movement==='FAST MOVING'){shjStatus='URGENT TRANSFER';shjAction=`SEND ${fromMotorline} FROM MOTORLINE`;}
+  else if(fromMotorline>0){shjStatus='TRANSFER TO SHJ';shjAction=`SEND ${fromMotorline} FROM MOTORLINE`;}
+  else if(remainingShortage>0){shjStatus='PURCHASE / REVIEW';shjAction=fromBavaria?`USE BAVARIA ${fromBavaria}; SHORT ${remainingShortage}`:`NO SAFE MOTORLINE EXCESS`;}
+  const actionable=['URGENT TRANSFER','TRANSFER TO SHJ','USE BAVARIA STOCK','PARTIAL TRANSFER / REVIEW','PURCHASE / REVIEW'].includes(shjStatus);
+  return Object.assign({},p,{estShjDemand,estMotorlineDemand,targetWeeks,targetShjQty:targetQty,shjGap,fromBavaria,mlReserveQty,mlExcess,fromMotorline,remainingShortage,shjStatus,shjAction,shjActionable:actionable});
+ });
+}
+function populateShjFilters(){
+ const b=$('shjBrandFilter'),m=$('shjMakeFilter'),st=$('shjStatusFilter');if(!b||!m||!st)return;
+ const fill=(el,values,label)=>{const cur=el.value;el.innerHTML=`<option value="">${label}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(values.includes(cur))el.value=cur;};
+ fill(b,[...new Set(state.shjRows.map(x=>x.brand).filter(Boolean))].sort((a,c)=>String(a).localeCompare(String(c))),'All Brands');
+ fill(m,[...new Set(state.shjRows.map(x=>x.make).filter(Boolean))].sort((a,c)=>String(a).localeCompare(String(c))),'All Makes');
+ fill(st,['URGENT TRANSFER','TRANSFER TO SHJ','USE BAVARIA STOCK','PARTIAL TRANSFER / REVIEW','PURCHASE / REVIEW','SHJ STOCK OK','REVIEW DEMAND'],'All Statuses');
+}
+function applyShjFilters(){
+ if(!$('shjSearch'))return;
+ const q=$('shjSearch').value.trim().toLowerCase(),brand=$('shjBrandFilter').value,make=$('shjMakeFilter').value,status=$('shjStatusFilter').value,actionOnly=$('shjActionableOnly').checked;
+ state.shjFiltered=state.shjRows.filter(p=>{
+  if(brand&&p.brand!==brand)return false;if(make&&p.make!==make)return false;if(status&&p.shjStatus!==status)return false;if(actionOnly&&!p.shjActionable)return false;
+  if(q){const hay=[p.internalRef,p.oem,p.description,p.brand,p.brandPartNo,p.make].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+  return true;
+ });
+ renderShj();
+}
+function shjStatusClass(s){if(s==='URGENT TRANSFER')return'critical';if(s==='TRANSFER TO SHJ')return'wait';if(s==='USE BAVARIA STOCK')return'ok';if(s==='PURCHASE / REVIEW')return'reorder';if(s==='PARTIAL TRANSFER / REVIEW')return'spike';if(s==='SHJ STOCK OK')return'ok';return'review';}
+function renderShj(){
+ if(!$('shjTable'))return;
+ const rows=state.shjFiltered||[];
+ if(!state.computed.length){$('shjTable').innerHTML='<tbody><tr><td class="empty">Upload data first.</td></tr></tbody>';['shjKpiUrgent','shjKpiTransfer','shjKpiBavaria','shjKpiPurchase','shjKpiQty'].forEach(id=>$(id).textContent='0');$('shjResults').textContent='0 items';return;}
+ const count=s=>rows.filter(p=>p.shjStatus===s).length;
+ $('shjKpiUrgent').textContent=fmt(count('URGENT TRANSFER'));
+ $('shjKpiTransfer').textContent=fmt(rows.filter(p=>p.fromMotorline>0).length);
+ $('shjKpiBavaria').textContent=fmt(rows.filter(p=>p.fromBavaria>0).length);
+ $('shjKpiPurchase').textContent=fmt(rows.filter(p=>['PURCHASE / REVIEW','PARTIAL TRANSFER / REVIEW'].includes(p.shjStatus)).length);
+ $('shjKpiQty').textContent=fmt(rows.reduce((s,p)=>s+p.fromMotorline,0));
+ $('shjResults').textContent=`${fmt(rows.length)} items • ${fmt(rows.reduce((s,p)=>s+p.fromMotorline,0))} pcs from Motorline • ${fmt(rows.reduce((s,p)=>s+p.fromBavaria,0))} pcs from Bavaria`;
+ const sorted=[...rows].sort((a,b)=>{const rank={'URGENT TRANSFER':1,'TRANSFER TO SHJ':2,'USE BAVARIA STOCK':3,'PARTIAL TRANSFER / REVIEW':4,'PURCHASE / REVIEW':5,'SHJ STOCK OK':6,'REVIEW DEMAND':7};return (rank[a.shjStatus]||9)-(rank[b.shjStatus]||9)||b.fromMotorline-a.fromMotorline||b.estShjDemand-a.estShjDemand;});
+ $('shjTable').innerHTML=`<thead><tr><th>Old Number</th><th>Add Description</th><th>Make</th><th>OEM</th><th>Brand</th><th class="num">Motorline</th><th class="num">Bavaria Nearby</th><th class="num">SHJ Stock</th><th class="num">Group Demand / Mo</th><th class="num">Est. SHJ Demand / Mo</th><th class="num">Target Weeks</th><th class="num">SHJ Target Qty</th><th class="num">Use Bavaria</th><th class="num">ML Safe Excess</th><th class="num">Transfer From ML</th><th class="num">Shortage After Transfer</th><th>Status</th><th>Action</th></tr></thead><tbody>${sorted.map(p=>`<tr><td><button class="mini-link open-detail" data-id="${esc(p._id)}">${esc(p.internalRef||'—')}</button></td><td class="desc" title="${esc(p.description)}">${esc(p.description||'—')}</td><td>${esc(p.make||'UNKNOWN')}</td><td>${esc(p.oem||'—')}</td><td>${esc(p.brand)}</td><td class="num">${fmt(p.motorlineStock)}</td><td class="num">${fmt(p.bavariaStock)}</td><td class="num">${fmt(p.tibaoStock)}</td><td class="num">${fmt(p.demandRate,1)}</td><td class="num">${fmt(p.estShjDemand,1)}</td><td class="num">${fmt(p.targetWeeks,1)}</td><td class="num">${fmt(p.targetShjQty)}</td><td class="num">${fmt(p.fromBavaria)}</td><td class="num">${fmt(p.mlExcess)}</td><td class="num shj-transfer-qty">${fmt(p.fromMotorline)}</td><td class="num">${fmt(p.remainingShortage)}</td><td><span class="badge ${shjStatusClass(p.shjStatus)}">${esc(p.shjStatus)}</span></td><td>${esc(p.shjAction)}</td></tr>`).join('')||'<tr><td colspan="18" class="empty">No items match the current SHJ replenishment filters.</td></tr>'}</tbody>`;
+ bindDetailLinks($('shjTable'));
+}
+function exportShjRows(rows,name){
+ if(!rows.length){toast('Nothing to export');return;}
+ const data=rows.map(p=>({'Old Number':p.internalRef,'OEM No Space':p.oemKey||E.normalizeOEM(p.oem),'Add Description':p.description,'Brand':p.brand,'Motorline Stock':p.motorlineStock,'Bavaria Nearby Stock':p.bavariaStock,'SHJ Stock':p.tibaoStock,'Group Smart Demand / Mo':+p.demandRate.toFixed(2),'Estimated SHJ Demand / Mo':+p.estShjDemand.toFixed(2),'SHJ Target Weeks':p.targetWeeks,'SHJ Target Qty':p.targetShjQty,'Suggested From Bavaria':p.fromBavaria,'Motorline Safe Excess':p.mlExcess,'Suggested From Motorline':p.fromMotorline,'Remaining Shortage':p.remainingShortage,'Status':p.shjStatus,'Action':p.shjAction}));
+ const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();ws['!cols']=[{wch:28},{wch:22},{wch:46},{wch:18},{wch:16},{wch:18},{wch:14},{wch:20},{wch:22},{wch:16},{wch:15},{wch:20},{wch:18},{wch:22},{wch:18},{wch:24},{wch:32}];XLSX.utils.book_append_sheet(wb,ws,'SHJ Replenishment');XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} SHJ replenishment items`);
+}
+
 function brandSummary(){
  const m=new Map();state.computed.forEach(p=>{if(!m.has(p.brand))m.set(p.brand,{brand:p.brand,products:0,stock:0,fast:0,critical:0,reorder:0,wait:0,overstock:0,dead:0,review:0,suggested:0});const b=m.get(p.brand);b.products++;b.stock+=p.allCompany;b.fast+=p.movement==='FAST MOVING';b.critical+=p.condition==='CRITICAL ORDER';b.reorder+=p.condition==='REORDER SOON';b.wait+=p.condition==='WAIT INCOMING';b.overstock+=p.condition==='OVERSTOCK';b.dead+=p.condition==='DEAD STOCK';b.review+=['DORMANT / REVIEW','ONE-TIME / REVIEW','NO SALES / REVIEW'].includes(p.condition);b.suggested+=plannerQty(p);});return[...m.values()].sort((a,b)=>b.suggested-a.suggested||b.critical-a.critical||a.brand.localeCompare(b.brand));
 }
@@ -356,12 +425,14 @@ function renderBrandRulesUI(){
 function syncSettingsUI(){
  const s=state.settings;$('sTarget').value=s.targetCover;$('sSafety').value=s.safetyCover;$('sCritical').value=s.criticalCover;$('sReorder').value=s.reorderCover;$('sOverstock').value=s.overstockCover;$('sDormant').value=s.dormantMonths;$('sDead').value=s.deadStockMonths;$('sFast').value=s.fastRate;$('sMedium').value=s.mediumRate;$('sSpike').value=s.spikeDominancePct;$('sRegular').value=s.regularActivePct;$('sEquivalent').value=s.equivalentCreditPct;$('sDemand').value=s.demandMethod;$('sSuggestionMode').value=s.suggestionMode;
  $('sUseLeadTime').value=s.useLeadTime?'on':'off';$('sDefaultLead').value=s.defaultLeadTimeDays;$('sApplyConstraints').value=s.applyOrderConstraints?'on':'off';$('sDefaultMOQ').value=s.defaultMOQ;$('sDefaultMultiple').value=s.defaultOrderMultiple;
+ $('sShjShare').value=s.shjSharePct;$('sShjNormalWeeks').value=s.shjNormalCoverWeeks;$('sShjFastWeeks').value=s.shjFastCoverWeeks;$('sShjMLReserve').value=s.shjMotorlineReserveMonths;$('sShjBavaria').value=s.shjUseBavariaBackup?'on':'off';$('sShjMinDemand').value=s.shjMinGroupDemand;
  renderBrandRulesUI();
 }
 function applySettingsFromUI(){
  state.qtyOverrides.clear();
  state.settings.targetCover=+$('sTarget').value;state.settings.safetyCover=+$('sSafety').value;state.settings.criticalCover=+$('sCritical').value;state.settings.reorderCover=+$('sReorder').value;state.settings.overstockCover=+$('sOverstock').value;state.settings.dormantMonths=+$('sDormant').value;state.settings.deadStockMonths=+$('sDead').value;state.settings.fastRate=+$('sFast').value;state.settings.mediumRate=+$('sMedium').value;state.settings.spikeDominancePct=+$('sSpike').value;state.settings.regularActivePct=+$('sRegular').value;state.settings.equivalentCreditPct=+$('sEquivalent').value;state.settings.demandMethod=$('sDemand').value;state.settings.suggestionMode=$('sSuggestionMode').value;
  state.settings.useLeadTime=$('sUseLeadTime').value==='on';state.settings.defaultLeadTimeDays=Math.max(0,+$('sDefaultLead').value||0);state.settings.applyOrderConstraints=$('sApplyConstraints').value==='on';state.settings.defaultMOQ=Math.max(0,+$('sDefaultMOQ').value||0);state.settings.defaultOrderMultiple=Math.max(1,+$('sDefaultMultiple').value||1);
+ state.settings.shjSharePct=Math.max(0,Math.min(100,+$('sShjShare').value||0));state.settings.shjNormalCoverWeeks=Math.max(0,+$('sShjNormalWeeks').value||0);state.settings.shjFastCoverWeeks=Math.max(0,+$('sShjFastWeeks').value||0);state.settings.shjMotorlineReserveMonths=Math.max(0,+$('sShjMLReserve').value||0);state.settings.shjUseBavariaBackup=$('sShjBavaria').value==='on';state.settings.shjMinGroupDemand=Math.max(0,+$('sShjMinDemand').value||0);
  const rules={...(state.settings.brandRules||{})};
  document.querySelectorAll('#brandRulesTable .rule-input').forEach(inp=>{
   const key=inp.dataset.brandKey,name=inp.dataset.brandName,field=inp.dataset.field;
@@ -395,8 +466,9 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_8_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_8_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v2_9_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v2_9_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('clearSelection').onclick=()=>{const had=state.selected.size;state.selected.clear();renderPlanner();updateSelectedButton();toast(had?'Selection cleared':'No items were selected');};
+['shjSearch'].forEach(id=>$(id).addEventListener('input',applyShjFilters));['shjBrandFilter','shjMakeFilter','shjStatusFilter','shjActionableOnly'].forEach(id=>$(id).addEventListener('change',applyShjFilters));$('shjClearFilters').onclick=()=>{$('shjSearch').value='';$('shjBrandFilter').value='';$('shjMakeFilter').value='';$('shjStatusFilter').value='';$('shjActionableOnly').checked=true;applyShjFilters();};$('exportShj').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_v2_9_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
 $('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.qtyOverrides.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
