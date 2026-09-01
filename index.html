@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TiBAO Purchase Intelligence</title>
   <meta name="description" content="Browser-based purchase intelligence prototype for Odoo Excel exports.">
-  <link rel="stylesheet" href="styles.css?v=2.9">
+  <link rel="stylesheet" href="styles.css?v=3.0">
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v2.9</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v3.0</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
@@ -26,7 +26,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="version-chip">Logic v2.9</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v3.0</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
 
     <div class="content">
@@ -77,7 +77,7 @@
 
         <div class="grid-2">
           <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Make / Description / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
-          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v2.9</div></div><div class="panel-body"><div class="insights">
+          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v3.0</div></div><div class="panel-body"><div class="insights">
             <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
             <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
             <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock stays separate</strong><span>All Company Qty + On Way + On Way 2 are visible individually and used in projected cover.</span></div></div>
@@ -112,14 +112,13 @@
         <div class="panel">
           <div class="shj-toolbar">
             <div class="field"><label>Search</label><input id="shjSearch" placeholder="OEM, old number, description..." autocomplete="off"></div>
-            <div class="field"><label>Brand</label><select id="shjBrandFilter"><option value="">All Brands</option></select></div>
+            <div class="field"><label>Brand</label><div class="multi-select" id="shjBrandMulti"><button type="button" class="multi-trigger" id="shjBrandFilterTrigger">All Brands</button><div class="multi-menu hidden" id="shjBrandFilterMenu"></div></div></div>
             <div class="field"><label>Make</label><select id="shjMakeFilter"><option value="">All Makes</option></select></div>
             <div class="field"><label>Status</label><select id="shjStatusFilter"><option value="">All Statuses</option></select></div>
             <label class="shj-check"><input id="shjActionableOnly" type="checkbox" checked> Actionable only</label>
-            <button class="btn" id="shjClearFilters">Clear</button>
-            <button class="btn primary" id="exportShj">Export Replenishment</button>
+            <button class="btn" id="shjClearFilters">Clear Filters</button>
           </div>
-          <div class="panel-head shj-summary-head"><div><div class="panel-title">Sharjah Replenishment Suggestions</div><div class="panel-note" id="shjResults">0 items</div></div></div>
+          <div class="panel-head shj-summary-head"><div><div class="panel-title">Sharjah Replenishment Suggestions</div><div class="panel-note" id="shjResults">0 items</div></div><div class="planner-actions"><button class="btn" id="shjExportFiltered">Export Filtered</button><button class="btn primary" id="shjExportSelected" disabled>Export Selected (0)</button><button class="btn" id="shjClearSelection">Clear Selection</button></div></div>
           <div class="table-wrap"><table class="data-table shj-table" id="shjTable"></table></div>
         </div>
       </section>
@@ -184,7 +183,7 @@
 <div class="toast hidden" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="engine.js?v=2.9"></script>
-<script src="app.js?v=2.9"></script>
+<script src="engine.js?v=3.0"></script>
+<script src="app.js?v=3.0"></script>
 </body>
 </html>

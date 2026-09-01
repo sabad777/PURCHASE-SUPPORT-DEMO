@@ -103,3 +103,12 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 .shj-summary-head{border-top:0}.shj-table{min-width:2350px}.shj-transfer-qty{font-weight:900;color:var(--purple);background:#fffafd}.shj-settings-panel{margin-top:16px}.shj-settings-grid{padding:14px}
 @media(max-width:1350px){.shj-kpis{grid-template-columns:repeat(3,1fr)}.shj-toolbar{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.shj-kpis{grid-template-columns:1fr 1fr}.shj-toolbar{grid-template-columns:1fr 1fr}}
+
+/* v3.0 workflow usability */
+.line-no{width:52px;min-width:52px;text-align:center!important;color:#6f7785;font-variant-numeric:tabular-nums}
+.shj-table{min-width:2700px}
+.shj-table .shj-action{min-width:185px;font-weight:700}
+.shj-table .qty-cell{min-width:150px;background:#fffafd}
+#shjBrandMulti .multi-menu{min-width:290px}
+.shj-summary-head{gap:14px;align-items:center}
+.shj-summary-head .planner-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}

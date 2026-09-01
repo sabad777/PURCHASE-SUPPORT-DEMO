@@ -1,28 +1,42 @@
-# TiBAO Purchase Intelligence v2.9
+# TiBAO Purchase Intelligence v3.0
 
-## New: SHJ Replenishment
-A separate stock-balancing view has been added for Sharjah using the current Odoo Excel.
+## Purchase Planner
+- Added Line / Serial # before the part number.
+- Existing multi-brand selection remains available.
+- Existing editable Suggested Purchase Qty and selected export remain unchanged.
 
-Because the current export does **not** contain separate Sharjah monthly sales, V2.9 temporarily estimates SHJ demand from overall smart demand. The final Odoo version should replace that assumption with actual SHJ sales history.
+## SHJ Replenishment
+- Added Line / Serial # before the part number.
+- Added Brand Part No.
+- Column order now places Status and Action immediately after Brand Part No.
+- Suggested From Motorline is editable before export.
+- Brand filter is now multi-select with search, Select All and Clear.
+- Added row checkboxes and Select All for the current filtered SHJ list.
+- Added Export Selected and Clear Selection, same workflow as Purchase Planner.
+- Changing SHJ filters removes selections that are no longer in the current filtered result.
 
-### Current logic
-- Uses Tibao SHJ stock directly.
-- Treats Bavaria stock as nearby backup when enabled.
-- Estimates Sharjah demand as a configurable percentage of overall smart demand.
-- Uses low target cover because the Motorline → Sharjah vehicle runs weekly.
-- Keeps a configurable Motorline reserve before suggesting transfer.
-- Avoids automatic transfers for dead/dormant/one-time/no-sales items or items below the minimum demand threshold.
-- Shows Urgent Transfer, Transfer to SHJ, Use Bavaria Stock, Partial Transfer / Review, Purchase / Review, SHJ Stock OK and Review Demand.
-- Exports the current SHJ replenishment list to Excel.
+## SHJ Excel export
+The exported SHJ workbook contains only:
+1. Line no
+2. Old Number
+3. OEM No Space
+4. Add Description
+5. Brand No
+6. Brand
+7. Suggested From Motorline
+8. Motorline Stock
+9. Bavaria Nearby Stock
+10. SHJ Stock
+11. Status
 
-### Default prototype settings
-- Estimated SHJ demand share: 25%
-- Normal SHJ cover: 2 weeks
-- Fast-mover SHJ cover: 3 weeks
-- Motorline reserve: 1.5 months
-- Bavaria nearby backup: ON
-- Minimum group smart demand: 2 pcs/month
+The edited Suggested From Motorline quantity is used in the export.
 
-## GitHub update
-Replace: index.html, app.js, engine.js and styles.css.
-Commit, wait for GitHub Pages to redeploy, then press Ctrl+F5. The page should show **Logic v2.9**.
+## GitHub
+Replace:
+- index.html
+- app.js
+- engine.js
+- styles.css
+
+Commit the changes, wait for GitHub Pages, then press Ctrl+F5.
+The site should display Logic v3.0.
