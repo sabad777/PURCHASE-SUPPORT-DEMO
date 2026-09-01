@@ -109,6 +109,11 @@ button,input,select{font:inherit}.hidden{display:none!important}.app{display:gri
 .shj-table{min-width:2700px}
 .shj-table .shj-action{min-width:185px;font-weight:700}
 .shj-table .qty-cell{min-width:150px;background:#fffafd}
-#shjBrandMulti .multi-menu{min-width:290px}
 .shj-summary-head{gap:14px;align-items:center}
 .shj-summary-head .planner-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+
+/* v3.1 SHJ filters — same multi-select treatment as Dashboard */
+#shjBrandMulti,#shjMakeMulti,#shjStatusMulti{width:100%}
+#shjBrandMulti .multi-menu,#shjMakeMulti .multi-menu,#shjStatusMulti .multi-menu{width:max(260px,100%);min-width:0}
+#shjBrandMulti .multi-trigger,#shjMakeMulti .multi-trigger,#shjStatusMulti .multi-trigger{font-size:12px}

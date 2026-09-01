@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const E=window.PurchaseEngine;
-let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),shjSelected:new Set(),shjSelectedBrands:new Set(),shjQtyOverrides:new Map(),activeView:'dashboard'};
+let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),shjSelected:new Set(),shjSelectedBrands:new Set(),shjSelectedMakes:new Set(),shjSelectedStatuses:new Set(),shjQtyOverrides:new Map(),activeView:'dashboard'};
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -55,7 +55,7 @@ async function handleFile(file){
  try{
   $('fileChip').textContent='Reading '+file.name+'…';
   const parsed=await readFile(file);
-  state.products=parsed.products;state.reportDate=parsed.reportDate;state.map=parsed.map;state.fileName=file.name;state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjQtyOverrides.clear();state.page=1;
+  state.products=parsed.products;state.reportDate=parsed.reportDate;state.map=parsed.map;state.fileName=file.name;state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();state.shjQtyOverrides.clear();state.page=1;
   recompute();
   $('fileChip').textContent=file.name;
   $('reportMeta').textContent=`${fmt(state.products.length)} products • Data as of ${dateFmt(state.reportDate)} • Smart month-by-month + purchase-history analysis`;
@@ -92,7 +92,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjQtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v3.0`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();state.shjQtyOverrides.clear();recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v3.1`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());state.shjRows=calculateShjRows();populateFilters();populateShjFilters();applyFilters();applyShjFilters();renderDashboard();renderPlanner();renderShj();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -278,10 +278,57 @@ function calculateShjRows(){
   return Object.assign({},p,{estShjDemand,estMotorlineDemand,targetWeeks,targetShjQty:targetQty,shjGap,fromBavaria,mlReserveQty,mlExcess,fromMotorline,remainingShortage,shjStatus,shjAction,shjActionable:actionable});
  });
 }
-function updateShjBrandTrigger(values){const trigger=$('shjBrandFilterTrigger'),set=state.shjSelectedBrands;if(!trigger)return;if(!set.size)trigger.textContent='All Brands';else if(set.size===1)trigger.textContent=[...set][0];else trigger.textContent=`${set.size} selected`;trigger.classList.toggle('has-selection',set.size>0);}
-function renderShjBrandMenu(values){const set=state.shjSelectedBrands,menu=$('shjBrandFilterMenu');if(!menu)return;menu.innerHTML=`<div class="multi-head"><input class="multi-search" type="text" placeholder="Search brands..." autocomplete="off"><div class="multi-actions"><button type="button" data-action="all">Select all</button><button type="button" data-action="clear">Clear</button></div></div><div class="multi-options">${values.map(v=>`<label class="multi-option" data-label="${esc(String(v).toLowerCase())}"><input type="checkbox" value="${esc(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join('')}</div>`;menu.querySelectorAll('.multi-option input').forEach(cb=>cb.onchange=()=>{cb.checked?set.add(cb.value):set.delete(cb.value);updateShjBrandTrigger(values);applyShjFilters();});menu.querySelector('[data-action="all"]').onclick=()=>{values.forEach(v=>set.add(v));renderShjBrandMenu(values);applyShjFilters();};menu.querySelector('[data-action="clear"]').onclick=()=>{set.clear();renderShjBrandMenu(values);applyShjFilters();};const search=menu.querySelector('.multi-search');search.oninput=()=>{const q=search.value.trim().toLowerCase();menu.querySelectorAll('.multi-option').forEach(x=>x.classList.toggle('hidden',q&&!x.dataset.label.includes(q)));};updateShjBrandTrigger(values);}
-function populateShjFilters(){const m=$('shjMakeFilter'),st=$('shjStatusFilter');if(!m||!st)return;const fill=(el,values,label)=>{const cur=el.value;el.innerHTML=`<option value="">${label}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(values.includes(cur))el.value=cur;};const brands=[...new Set(state.shjRows.map(x=>x.brand).filter(Boolean))].sort((a,c)=>String(a).localeCompare(String(c)));pruneSelection(state.shjSelectedBrands,brands);renderShjBrandMenu(brands);fill(m,[...new Set(state.shjRows.map(x=>x.make).filter(Boolean))].sort((a,c)=>String(a).localeCompare(String(c))),'All Makes');fill(st,['URGENT TRANSFER','TRANSFER TO SHJ','USE BAVARIA STOCK','PARTIAL TRANSFER / REVIEW','PURCHASE / REVIEW','SHJ STOCK OK','REVIEW DEMAND'],'All Statuses');}
-function applyShjFilters(){if(!$('shjSearch'))return;const q=$('shjSearch').value.trim().toLowerCase(),make=$('shjMakeFilter').value,status=$('shjStatusFilter').value,actionOnly=$('shjActionableOnly').checked;state.shjFiltered=state.shjRows.filter(p=>{if(state.shjSelectedBrands.size&&!state.shjSelectedBrands.has(p.brand))return false;if(make&&p.make!==make)return false;if(status&&p.shjStatus!==status)return false;if(actionOnly&&!p.shjActionable)return false;if(q){const hay=[p.internalRef,p.oem,p.description,p.brand,p.brandPartNo,p.make].join(' ').toLowerCase();if(!hay.includes(q))return false;}return true;});const visibleIds=new Set(state.shjFiltered.map(p=>p._id));[...state.shjSelected].forEach(id=>{if(!visibleIds.has(id))state.shjSelected.delete(id);});renderShj();updateShjSelectionButtons();}
+function shjFilterConfig(type){
+ const configs={
+  brand:{set:state.shjSelectedBrands,trigger:'shjBrandFilterTrigger',menu:'shjBrandFilterMenu',all:'All Brands',search:'Search brands...'},
+  make:{set:state.shjSelectedMakes,trigger:'shjMakeFilterTrigger',menu:'shjMakeFilterMenu',all:'All Makes',search:'Search makes...'},
+  status:{set:state.shjSelectedStatuses,trigger:'shjStatusFilterTrigger',menu:'shjStatusFilterMenu',all:'All Statuses',search:null}
+ };
+ return configs[type];
+}
+function updateShjMultiTrigger(type){
+ const c=shjFilterConfig(type),set=c.set,trigger=$(c.trigger);
+ if(!set.size)trigger.textContent=c.all;
+ else if(set.size===1)trigger.textContent=[...set][0];
+ else trigger.textContent=`${set.size} selected`;
+ trigger.classList.toggle('has-selection',set.size>0);
+}
+function renderShjMultiMenu(type,values){
+ const c=shjFilterConfig(type),set=c.set,menu=$(c.menu);
+ menu.innerHTML=`
+  <div class="multi-head">
+   ${c.search?`<input class="multi-search" type="text" placeholder="${c.search}" autocomplete="off">`:''}
+   <div class="multi-actions"><button type="button" data-action="all">Select all</button><button type="button" data-action="clear">Clear</button></div>
+  </div>
+  <div class="multi-options">${values.map(v=>`<label class="multi-option" data-label="${esc(String(v).toLowerCase())}"><input type="checkbox" value="${esc(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join('')}</div>`;
+ menu.querySelectorAll('.multi-option input').forEach(cb=>cb.onchange=()=>{cb.checked?set.add(cb.value):set.delete(cb.value);updateShjMultiTrigger(type);applyShjFilters();});
+ menu.querySelector('[data-action="all"]').onclick=()=>{values.forEach(v=>set.add(v));renderShjMultiMenu(type,values);updateShjMultiTrigger(type);applyShjFilters();};
+ menu.querySelector('[data-action="clear"]').onclick=()=>{set.clear();renderShjMultiMenu(type,values);updateShjMultiTrigger(type);applyShjFilters();};
+ const search=menu.querySelector('.multi-search');
+ if(search)search.oninput=()=>{const q=search.value.trim().toLowerCase();menu.querySelectorAll('.multi-option').forEach(x=>x.classList.toggle('hidden',q&&!x.dataset.label.includes(q)));};
+ updateShjMultiTrigger(type);
+}
+function populateShjFilters(){
+ const brands=[...new Set(state.shjRows.map(x=>x.brand).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+ const makes=[...new Set(state.shjRows.map(x=>x.make).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+ const statuses=['URGENT TRANSFER','TRANSFER TO SHJ','USE BAVARIA STOCK','PARTIAL TRANSFER / REVIEW','PURCHASE / REVIEW','SHJ STOCK OK','REVIEW DEMAND'];
+ pruneSelection(state.shjSelectedBrands,brands);pruneSelection(state.shjSelectedMakes,makes);pruneSelection(state.shjSelectedStatuses,statuses);
+ renderShjMultiMenu('brand',brands);renderShjMultiMenu('make',makes);renderShjMultiMenu('status',statuses);
+}
+function applyShjFilters(){
+ if(!$('shjSearch'))return;
+ const q=$('shjSearch').value.trim().toLowerCase(),actionOnly=$('shjActionableOnly').checked;
+ state.shjFiltered=state.shjRows.filter(p=>{
+  if(state.shjSelectedBrands.size&&!state.shjSelectedBrands.has(p.brand))return false;
+  if(state.shjSelectedMakes.size&&!state.shjSelectedMakes.has(p.make))return false;
+  if(state.shjSelectedStatuses.size&&!state.shjSelectedStatuses.has(p.shjStatus))return false;
+  if(actionOnly&&!p.shjActionable)return false;
+  if(q){const hay=[p.internalRef,p.oem,p.description,p.brand,p.brandPartNo,p.make].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+  return true;
+ });
+ const visibleIds=new Set(state.shjFiltered.map(p=>p._id));[...state.shjSelected].forEach(id=>{if(!visibleIds.has(id))state.shjSelected.delete(id);});
+ renderShj();updateShjSelectionButtons();
+}
 function shjStatusClass(s){if(s==='URGENT TRANSFER')return'critical';if(s==='TRANSFER TO SHJ')return'wait';if(s==='USE BAVARIA STOCK')return'ok';if(s==='PURCHASE / REVIEW')return'reorder';if(s==='PARTIAL TRANSFER / REVIEW')return'spike';if(s==='SHJ STOCK OK')return'ok';return'review';}
 function renderShj(){
  if(!$('shjTable'))return;
@@ -453,14 +500,21 @@ function toggleMultiMenu(type){
 $('brandFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('brand');};
 $('conditionFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('condition');};
 ['brandFilterMenu','conditionFilterMenu'].forEach(id=>$(id).onclick=e=>e.stopPropagation());
-document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');$('shjBrandFilterMenu').classList.add('hidden');});
+document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));});
 $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedConditions.clear();['search','descriptionFilter','makeFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).value='');populateFilters();applyFilters();};
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v3_0_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v3_0_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v3_1_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v3_1_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('clearSelection').onclick=()=>{const had=state.selected.size;state.selected.clear();renderPlanner();updateSelectedButton();toast(had?'Selection cleared':'No items were selected');};
-['shjSearch'].forEach(id=>$(id).addEventListener('input',applyShjFilters));['shjMakeFilter','shjStatusFilter','shjActionableOnly'].forEach(id=>$(id).addEventListener('change',applyShjFilters));$('shjBrandFilterTrigger').onclick=e=>{e.stopPropagation();$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');$('shjBrandFilterMenu').classList.toggle('hidden');};$('shjBrandFilterMenu').onclick=e=>e.stopPropagation();$('shjClearFilters').onclick=()=>{state.shjSelectedBrands.clear();$('shjSearch').value='';$('shjMakeFilter').value='';$('shjStatusFilter').value='';$('shjActionableOnly').checked=true;populateShjFilters();applyShjFilters();};$('shjExportFiltered').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_Filtered_v3_0_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjExportSelected').onclick=()=>exportShjRows(state.shjFiltered.filter(p=>state.shjSelected.has(p._id)),`SHJ_Replenishment_Selected_v3_0_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjClearSelection').onclick=()=>{const had=state.shjSelected.size;state.shjSelected.clear();renderShj();updateShjSelectionButtons();toast(had?'SHJ selection cleared':'No SHJ items were selected');};
+['shjSearch'].forEach(id=>$(id).addEventListener('input',applyShjFilters));$('shjActionableOnly').addEventListener('change',applyShjFilters);
+function closeShjMultiMenus(){['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));}
+[['brand','shjBrandFilterTrigger','shjBrandFilterMenu'],['make','shjMakeFilterTrigger','shjMakeFilterMenu'],['status','shjStatusFilterTrigger','shjStatusFilterMenu']].forEach(([type,triggerId,menuId])=>{
+ $(triggerId).onclick=e=>{e.stopPropagation();$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>{if(id!==menuId)$(id).classList.add('hidden');});$(menuId).classList.toggle('hidden');};
+ $(menuId).onclick=e=>e.stopPropagation();
+});
+$('shjClearFilters').onclick=()=>{state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();$('shjSearch').value='';$('shjActionableOnly').checked=true;populateShjFilters();applyShjFilters();};
+$('shjExportFiltered').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_Filtered_v3_1_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjExportSelected').onclick=()=>exportShjRows(state.shjFiltered.filter(p=>state.shjSelected.has(p._id)),`SHJ_Replenishment_Selected_v3_1_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjClearSelection').onclick=()=>{const had=state.shjSelected.size;state.shjSelected.clear();renderShj();updateShjSelectionButtons();toast(had?'SHJ selection cleared':'No SHJ items were selected');};
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
 $('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.qtyOverrides.clear();state.shjQtyOverrides.clear();state.shjSelected.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
