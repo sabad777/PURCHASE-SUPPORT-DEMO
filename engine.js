@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v3.2 - calculation engine
+/* TiBAO Purchase Intelligence v3.3 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -42,6 +42,7 @@
     defaultMOQ: 0,
     defaultOrderMultiple: 1,
     brandRules: {},
+    brandGroups: [],
     shjSharePct: 25,
     shjNormalCoverWeeks: 2,
     shjFastCoverWeeks: 3,
@@ -93,11 +94,26 @@
   function normalizeKey(v) { return text(v).toLowerCase().replace(/[\s._()\-\/]+/g, ''); }
   function normalizeOEM(v) { return text(v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
+  function brandGroupKey(v) { return text(v).toUpperCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function clampPct(v, fallback) { const x=Number(v); return Number.isFinite(x)?Math.max(0,Math.min(100,x)):fallback; }
+  function normalizeBrandGroup(g, i) {
+    const brands=Array.from(new Set((Array.isArray(g&&g.brands)?g.brands:[]).map(brandGroupKey).filter(Boolean)));
+    return {
+      id:text(g&&g.id)||`group_${i+1}`, name:text(g&&g.name)||`Brand Group ${i+1}`, enabled:!(g&&g.enabled===false), brands,
+      stockCreditPct:clampPct(g&&g.stockCreditPct,100), onWayCreditPct:clampPct(g&&g.onWayCreditPct,100), onWay2CreditPct:clampPct(g&&g.onWay2CreditPct,100)
+    };
+  }
   function cleanSettings(settingsInput) {
     const settings = Object.assign({}, DEFAULT_SETTINGS, settingsInput || {});
     settings.brandRules = (settingsInput && settingsInput.brandRules && typeof settingsInput.brandRules === 'object')
       ? settingsInput.brandRules : {};
+    settings.brandGroups = Array.isArray(settingsInput&&settingsInput.brandGroups)
+      ? settingsInput.brandGroups.map(normalizeBrandGroup).filter(g=>g.brands.length>=2) : [];
     return settings;
+  }
+  function purchasingBrandGroup(settings, brand) {
+    const key=brandGroupKey(brand);
+    return (settings.brandGroups||[]).find(g=>g.enabled&&g.brands.includes(key))||null;
   }
   function brandRule(settings, brand) {
     const key = text(brand).toUpperCase();
@@ -449,12 +465,39 @@
       const otherOnWay = alternatives.reduce((s,x)=>s+x.onWay,0);
       const otherOnWay2 = alternatives.reduce((s,x)=>s+x.onWay2,0);
       const otherSupply = otherStock + otherOnWay + otherOnWay2;
-      const equivalentCredit = otherSupply * Math.max(0,Math.min(100,settings.equivalentCreditPct))/100;
 
+      // Purchasing Brand Groups apply only to exact normalized OEM matches in this family.
+      const purchaseGroup = purchasingBrandGroup(settings, p.brand);
+      const groupKeys = new Set(purchaseGroup ? purchaseGroup.brands : []);
+      const groupedAlternatives = purchaseGroup ? alternatives.filter(a=>groupKeys.has(brandGroupKey(a.brand))) : [];
+      const outsideAlternatives = purchaseGroup ? alternatives.filter(a=>!groupKeys.has(brandGroupKey(a.brand))) : alternatives;
+      const groupStock = groupedAlternatives.reduce((s,x)=>s+x.stock,0);
+      const groupOnWay = groupedAlternatives.reduce((s,x)=>s+x.onWay,0);
+      const groupOnWay2 = groupedAlternatives.reduce((s,x)=>s+x.onWay2,0);
+      const groupStockCredit = purchaseGroup ? groupStock * purchaseGroup.stockCreditPct/100 : 0;
+      const groupOnWayCredit = purchaseGroup ? groupOnWay * purchaseGroup.onWayCreditPct/100 : 0;
+      const groupOnWay2Credit = purchaseGroup ? groupOnWay2 * purchaseGroup.onWay2CreditPct/100 : 0;
+      const groupIncomingCredit = groupOnWayCredit + groupOnWay2Credit;
+      const groupEquivalentCredit = groupStockCredit + groupIncomingCredit;
+
+      // Outside-group exact-OEM matches use the existing global Other-brand stock credit.
+      const outsideStock = outsideAlternatives.reduce((s,x)=>s+x.stock,0);
+      const outsideOnWay = outsideAlternatives.reduce((s,x)=>s+x.onWay,0);
+      const outsideOnWay2 = outsideAlternatives.reduce((s,x)=>s+x.onWay2,0);
+      const globalPct = Math.max(0,Math.min(100,settings.equivalentCreditPct))/100;
+      const outsideStockCredit = outsideStock * globalPct;
+      const outsideIncomingCredit = (outsideOnWay + outsideOnWay2) * globalPct;
+      const outsideEquivalentCredit = outsideStockCredit + outsideIncomingCredit;
+
+      const equivalentStockCredit = groupStockCredit + outsideStockCredit;
+      const equivalentIncomingCredit = groupIncomingCredit + outsideIncomingCredit;
+      const equivalentCredit = equivalentStockCredit + equivalentIncomingCredit;
       const directSupply = p.allCompany + p.onWay + p.onWay2;
+      const effectiveCurrentSupply = p.allCompany + equivalentStockCredit;
       const effectiveSupply = directSupply + equivalentCredit;
       const demand = sp.demand;
       const currentCover = demand > 0 ? p.allCompany/demand : (p.allCompany>0?Infinity:0);
+      const effectiveCurrentCover = demand > 0 ? effectiveCurrentSupply/demand : (effectiveCurrentSupply>0?Infinity:0);
       const pipelineCover = demand > 0 ? directSupply/demand : (directSupply>0?Infinity:0);
       const effectiveCover = demand > 0 ? effectiveSupply/demand : (effectiveSupply>0?Infinity:0);
 
@@ -498,11 +541,11 @@
       else if (effectiveCover < settings.criticalCover) condition = 'CRITICAL ORDER';
       else if (settings.suggestionMode === 'trigger') {
         if (effectiveCover < reorderThreshold) condition = 'REORDER SOON';
-        else if (currentCover < reorderThreshold && (p.onWay + p.onWay2 + equivalentCredit) > 0) condition = 'WAIT INCOMING';
+        else if (effectiveCurrentCover < reorderThreshold && (p.onWay + p.onWay2 + equivalentIncomingCredit) > 0) condition = 'WAIT INCOMING';
         else condition = 'OK';
       } else {
         // Proactive mode: recommend a top-up whenever projected cover is below the planning horizon.
-        if (currentCover < proactiveThreshold && effectiveCover >= proactiveThreshold && (p.onWay + p.onWay2 + equivalentCredit) > 0) condition = 'WAIT INCOMING';
+        if (effectiveCurrentCover < proactiveThreshold && effectiveCover >= proactiveThreshold && (p.onWay + p.onWay2 + equivalentIncomingCredit) > 0) condition = 'WAIT INCOMING';
         else if (effectiveCover < proactiveThreshold) condition = 'REORDER SOON';
         else condition = 'OK';
       }
@@ -513,7 +556,7 @@
         : rawSuggestedQty;
       if (condition === 'CRITICAL ORDER') { priority=1; action='ORDER NOW'; }
       else if (condition === 'REORDER SOON') { priority=2; action='ADD TO NEXT PURCHASE'; }
-      else if (condition === 'WAIT INCOMING') { priority=3; action=p.onWay>0?'WAIT / EXPEDITE ON WAY':'FOLLOW UP ON WAY 2'; }
+      else if (condition === 'WAIT INCOMING') { priority=3; action=p.onWay>0?'WAIT / EXPEDITE ON WAY':p.onWay2>0?'FOLLOW UP ON WAY 2':(purchaseGroup&&groupIncomingCredit>0?`WAIT FOR ${purchaseGroup.name} INCOMING`:'WAIT FOR SAME-OEM INCOMING'); }
       else if (condition === 'OVERSTOCK') { priority=5; action='DO NOT ORDER'; }
       else if (condition === 'DEAD STOCK') { priority=5; action='STOP BUYING / CLEAR STOCK'; }
       else if (condition === 'DORMANT / REVIEW') { priority=5; action='HOLD / REVIEW DEMAND'; }
@@ -521,9 +564,11 @@
       else if (condition === 'NO SALES / REVIEW') { priority=5; action='REVIEW ITEM'; }
       else if (condition === 'NO DEMAND') { priority=5; action='NO PURCHASE'; }
 
-      const equivalentNote = alternatives.length
-        ? `${alternatives.length} other brand${alternatives.length>1?'s':''} / ${formatNumber(otherStock,0)} stock / ${formatNumber(otherOnWay+otherOnWay2,0)} incoming`
-        : 'No other brand match';
+      const equivalentNote = purchaseGroup && groupedAlternatives.length
+        ? `${purchaseGroup.name}: ${groupedAlternatives.length} group brand${groupedAlternatives.length>1?'s':''} / ${formatNumber(groupStock,0)} stock / ${formatNumber(groupOnWay+groupOnWay2,0)} incoming${outsideAlternatives.length?` • ${outsideAlternatives.length} outside match${outsideAlternatives.length>1?'es':''}`:''}`
+        : alternatives.length
+          ? `${alternatives.length} other brand${alternatives.length>1?'s':''} / ${formatNumber(otherStock,0)} stock / ${formatNumber(otherOnWay+otherOnWay2,0)} incoming`
+          : 'No other brand match';
 
       const reasonParts = [
         `${sp.pattern} demand`, `${sp.activeMonths}/${sp.monthCount} sales months`, `smart demand ${formatNumber(demand,1)}/mo`,
@@ -536,7 +581,8 @@
       if (p.totalPurchase) reasonParts.push(`purchased ${formatNumber(p.totalPurchase,0)} in report`);
       if (pp.purchaseSignal !== 'BALANCED' && pp.purchaseSignal !== 'NO PURCHASE HISTORY') reasonParts.push(pp.purchaseSignal.toLowerCase());
       if (alternatives.length) reasonParts.push(`same OEM other brands ${formatNumber(otherStock,0)} stock`);
-      if (settings.equivalentCreditPct > 0 && alternatives.length) reasonParts.push(`${settings.equivalentCreditPct}% equivalent credit used`);
+      if (purchaseGroup && groupedAlternatives.length) reasonParts.push(`${purchaseGroup.name} credit: ${formatNumber(groupStockCredit,0)} stock + ${formatNumber(groupIncomingCredit,0)} incoming`);
+      if (settings.equivalentCreditPct > 0 && outsideAlternatives.length) reasonParts.push(`${settings.equivalentCreditPct}% outside-group equivalent credit used`);
       if (settings.useLeadTime) reasonParts.push(`brand lead time ${formatNumber(rules.leadTimeDays,0)} days`);
       if (leadTimeRisk) reasonParts.push('projected supply is short of lead-time + safety cover');
       if (settings.applyOrderConstraints && suggested !== rawSuggestedQty && rawSuggestedQty > 0) {
@@ -547,7 +593,10 @@
       return Object.assign({}, p, sp, pp, {
         avgMonthlySales:sp.overall, recent3Avg:sp.recent3, recent6Avg:sp.recent6, demandRate:demand,
         demandPattern:sp.pattern, demandConfidence:sp.confidence, movement,
-        currentCover,pipelineCover,effectiveCover,directSupply,effectiveSupply,
+        currentCover,effectiveCurrentCover,pipelineCover,effectiveCover,directSupply,effectiveCurrentSupply,effectiveSupply,
+        purchaseGroupName:purchaseGroup?purchaseGroup.name:'',purchaseGroupBrands:purchaseGroup?purchaseGroup.brands:[],groupedAlternatives,
+        groupStock,groupOnWay,groupOnWay2,groupStockCredit,groupOnWayCredit,groupOnWay2Credit,groupIncomingCredit,groupEquivalentCredit,
+        outsideStock,outsideOnWay,outsideOnWay2,outsideEquivalentCredit,equivalentStockCredit,equivalentIncomingCredit,
         currentStockoutDate,pipelineStockoutDate,expectedNewOrderArrivalDate,
         leadTimeDays:rules.leadTimeDays,leadTimeMonths,leadTimeRequiredCover,reorderThreshold,leadTimeRisk,
         moq:rules.moq,orderMultiple:rules.orderMultiple,rawSuggestedQty,

@@ -1,17 +1,21 @@
-# TiBAO Purchase Intelligence v3.2
+# TiBAO Purchase Intelligence v3.3
 
-## SHJ filter design fix
-- Brand, Make and Status remain multi-select.
-- Their dropdowns now use the same compact checkbox/text design as the Dashboard filters.
-- Fixed the oversized checkbox problem caused by SHJ toolbar CSS affecting nested dropdown inputs.
+## Purchasing Brand Groups
+You can now create approved brand families that share exact-same-OEM stock and incoming quantities in the Purchase Planner.
 
-## SHJ performance improvement
-- SHJ Replenishment is now paginated instead of rendering every filtered row at once.
-- Default: 100 rows per page. Options: 50 / 100 / 250.
-- KPI counts, filtered totals, Select All and exports still operate on the complete filtered result, not just the visible page.
-- Previous / Next controls and page information are shown below the table.
+### TiBAO Family preset
+Settings → Purchasing Brand Groups → **Add TiBAO Family**. It will select matching loaded brands among TIBAO, TIBAO HD, TIBAO EXTRA, TG AUTOTEILE, SHOWORLD and SHOWORLD NEW/SHOWORLD_NEW.
 
-All purchase/replenishment calculations remain unchanged.
+The preset starts at 100% credit for Stock, On Way and On Way 2. Review the brands and percentages, then press **Apply Settings**.
 
-## GitHub update
-Replace index.html, app.js, engine.js and styles.css, commit, wait for Pages, then press Ctrl+F5. The site should show **Logic v3.2**.
+### Rules
+- Exact normalized OEM match is mandatory.
+- A brand can belong to only one enabled group.
+- Brands outside a group use the existing global Other-brand stock credit setting.
+- Dashboard Brand filters are only view filters; they do not create a purchasing group.
+
+### Example
+TIBAO stock 10 + TG AUTOTEILE On Way 2 60 + SHOWORLD On Way 2 40 = 110 effective same-OEM supply at 100% group credits. The TIBAO row is then assessed using that credited supply instead of ignoring the 100 pcs coming in the grouped brands.
+
+## GitHub
+Replace index.html, app.js, engine.js and styles.css. Commit, wait for Pages, then Ctrl+F5. Confirm **Logic v3.3**.

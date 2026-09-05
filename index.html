@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TiBAO Purchase Intelligence</title>
   <meta name="description" content="Browser-based purchase intelligence prototype for Odoo Excel exports.">
-  <link rel="stylesheet" href="styles.css?v=3.2">
+  <link rel="stylesheet" href="styles.css?v=3.3">
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v3.2</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v3.3</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
@@ -26,7 +26,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="version-chip">Logic v3.2</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v3.3</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
 
     <div class="content">
@@ -77,7 +77,7 @@
 
         <div class="grid-2">
           <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Make / Description / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
-          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v3.2</div></div><div class="panel-body"><div class="insights">
+          <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v3.3</div></div><div class="panel-body"><div class="insights">
             <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
             <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
             <div class="insight"><div class="dot">🚚</div><div><strong>Incoming stock stays separate</strong><span>All Company Qty + On Way + On Way 2 are visible individually and used in projected cover.</span></div></div>
@@ -168,7 +168,7 @@
           <div class="setting-card"><h3>Medium moving threshold</h3><input id="sMedium" type="number" step="0.1" min="0"><p>Below Fast and at/above this rate = Medium.</p></div>
           <div class="setting-card"><h3>One-time spike dominance</h3><input id="sSpike" type="number" step="5" min="50" max="100"><p>If one month contributes this percentage of sales with very few active months, automatic purchase is blocked for review.</p></div>
           <div class="setting-card"><h3>Regular-demand active months</h3><input id="sRegular" type="number" step="5" min="20" max="100"><p>Percentage of elapsed months that should contain sales before demand is treated as regular.</p></div>
-          <div class="setting-card"><h3>Other-brand stock credit</h3><input id="sEquivalent" type="number" step="5" min="0" max="100"><p>Percentage of exact-same-OEM other-brand stock/incoming deducted. Default 0% until management approves.</p></div>
+          <div class="setting-card"><h3>Other-brand stock credit</h3><input id="sEquivalent" type="number" step="5" min="0" max="100"><p>Fallback percentage for exact-same-OEM brands outside any Purchasing Brand Group. Keep 0% if only approved groups should affect purchasing.</p></div>
           <div class="setting-card"><h3>Use brand lead time</h3><select id="sUseLeadTime"><option value="off">Off — show dates only</option><option value="on">On — use lead time in reorder logic</option></select><p>When enabled, the planning horizon considers each brand's lead time plus safety cover.</p></div>
           <div class="setting-card"><h3>Default lead time</h3><input id="sDefaultLead" type="number" step="1" min="0"><p>Fallback delivery lead time in days. Override individual brands in the table below.</p></div>
           <div class="setting-card"><h3>Apply MOQ / order multiple</h3><select id="sApplyConstraints"><option value="off">Off — do not round suggestions</option><option value="on">On — apply configured rules</option></select><p>Optional because real MOQ can be product-specific. Purchaser can still manually edit Suggested Qty.</p></div>
@@ -176,6 +176,11 @@
           <div class="setting-card"><h3>Default order multiple</h3><input id="sDefaultMultiple" type="number" step="1" min="1"><p>Rounds an order upward to this multiple. Keep 1 for no rounding.</p></div>
           <div class="setting-card"><h3>Demand calculation</h3><select id="sDemand"><option value="smart">Smart pattern-based demand (recommended)</option><option value="overall">Overall average only</option><option value="recent">Recent 3-month average only</option><option value="max">Higher of overall / recent</option></select><p>Smart mode protects against old sales spikes and reacts to current trends.</p></div>
           <div class="setting-card"><h3>Suggestion mode</h3><select id="sSuggestionMode"><option value="proactive">Proactive — top up whenever below target</option><option value="trigger">Min/Max — only order below reorder cover</option></select><p>Proactive mode matches the management-planning use case. Min/Max behaves more like a traditional replenishment trigger.</p></div>
+        </div>
+        <div class="panel brand-groups-panel">
+          <div class="panel-head"><div><div class="panel-title">Purchasing Brand Groups</div><div class="panel-note">Combine approved brands only when the normalized OEM number matches exactly. Group credits affect the purchase condition and suggested quantity.</div></div><div class="planner-actions"><button class="btn" id="addBrandGroup">+ Add Group</button><button class="btn primary" id="addTibaoFamily">+ Add TiBAO Family</button></div></div>
+          <div class="brand-group-info"><strong>Important:</strong> Dashboard Brand selection is only a filter. A Purchasing Brand Group changes the calculation. A brand can belong to only one enabled group.</div>
+          <div id="brandGroupsContainer" class="brand-groups-container"></div>
         </div>
         <div class="panel brand-rules-panel">
           <div class="panel-head"><div><div class="panel-title">Brand Purchasing Rules</div><div class="panel-note">Set lead time per brand. MOQ and order multiple are optional; leave them at 0 / 1 when not applicable.</div></div><input id="brandRuleSearch" class="rule-search" placeholder="Search brand..." autocomplete="off"></div>
@@ -202,7 +207,7 @@
 <div class="toast hidden" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="engine.js?v=3.2"></script>
-<script src="app.js?v=3.2"></script>
+<script src="engine.js?v=3.3"></script>
+<script src="app.js?v=3.3"></script>
 </body>
 </html>

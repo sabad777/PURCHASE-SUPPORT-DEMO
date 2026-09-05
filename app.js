@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const E=window.PurchaseEngine;
-let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,shjPage:1,shjPageSize:100,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),shjSelected:new Set(),shjSelectedBrands:new Set(),shjSelectedMakes:new Set(),shjSelectedStatuses:new Set(),shjQtyOverrides:new Map(),activeView:'dashboard'};
+let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,shjPage:1,shjPageSize:100,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),shjSelected:new Set(),shjSelectedBrands:new Set(),shjSelectedMakes:new Set(),shjSelectedStatuses:new Set(),shjQtyOverrides:new Map(),activeView:'dashboard',brandGroupDrafts:[]};
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -12,6 +12,7 @@ const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',
 function normalizeSettings(raw){
  const out=Object.assign({},E.DEFAULT_SETTINGS,raw||{});
  out.brandRules=(raw&&raw.brandRules&&typeof raw.brandRules==='object')?raw.brandRules:{};
+ out.brandGroups=Array.isArray(raw&&raw.brandGroups)?raw.brandGroups.map((g,i)=>({id:String(g.id||`group_${i+1}`),name:String(g.name||`Brand Group ${i+1}`),enabled:g.enabled!==false,brands:Array.isArray(g.brands)?[...g.brands]:[],stockCreditPct:Number.isFinite(+g.stockCreditPct)?+g.stockCreditPct:100,onWayCreditPct:Number.isFinite(+g.onWayCreditPct)?+g.onWayCreditPct:100,onWay2CreditPct:Number.isFinite(+g.onWay2CreditPct)?+g.onWay2CreditPct:100})):[];
  return out;
 }
 function loadSettings(){try{return normalizeSettings(JSON.parse(localStorage.getItem('purchaseSettingsV2')||'{}'));}catch(_){return normalizeSettings({});}}
@@ -92,7 +93,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();state.shjQtyOverrides.clear();state.shjPage=1;recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v3.2`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();state.shjQtyOverrides.clear();state.shjPage=1;recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v3.3`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());state.shjRows=calculateShjRows();populateFilters();populateShjFilters();applyFilters();applyShjFilters();renderDashboard();renderPlanner();renderShj();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -408,7 +409,7 @@ function openDetail(id){
   </div>
   <div class="section-block"><div class="section-block-title">Monthly Sales Pattern</div><div class="month-chart">${monthBars}</div><div class="micro-grid"><span>Overall Avg <strong>${fmt(p.avgMonthlySales,1)}</strong></span><span>Recent 3M <strong>${fmt(p.recent3Avg,1)}</strong></span><span>Recent 6M <strong>${fmt(p.recent6Avg,1)}</strong></span><span>Pattern <strong>${esc(p.demandPattern)}</strong></span><span>Largest month share <strong>${fmt(p.spikeSharePct,0)}%</strong></span><span>Last sale <strong>${esc(lastSale)}</strong></span><span>Zero-sales streak <strong>${fmt(p.zeroSalesStreakMonths,0)} months</strong></span><span>Inactivity basis <strong>${esc(p.inactivityBasis||'—')}</strong></span></div></div>
   <div class="section-block"><div class="section-block-title">Purchase History Signal</div><div class="micro-grid"><span>Total Purchase Qty <strong>${fmt(p.totalPurchase)}</strong></span><span>Purchase Count <strong>${fmt(p.purchaseCount)}</strong></span><span>Last Purchase <strong>${esc(lastPurchase)}</strong></span><span>Purchase / Sales <strong>${ratio(p.purchaseSalesRatio)}</strong></span><span>Signal <strong>${esc(p.purchaseSignal)}</strong></span></div><div class="note-box">Historical purchases are <strong>not subtracted again</strong> from the suggestion because receipts are already reflected in current stock. They are used to detect overbuying, recent replenishment and unusual purchase/sales patterns.</div></div>
-  <div class="section-block"><div class="section-block-title">Suggested Purchase Calculation</div><div class="formula-box"><strong>${esc(p.condition)} — ${esc(p.action)}</strong><br>${esc(p.reason)}<br><br>Current cover: <strong>${cover(p.currentCover)} mo</strong> • With On Way + On Way 2: <strong>${cover(p.pipelineCover)} mo</strong> • Lead time: <strong>${fmt(p.leadTimeDays)} days</strong> • Lead-time + safety cover: <strong>${cover(p.leadTimeRequiredCover)} mo</strong><br>Target gap before MOQ/multiple: <strong>${fmt(p.rawSuggestedQty)} pcs</strong> • MOQ: <strong>${fmt(p.moq)}</strong> • Order multiple: <strong>${fmt(p.orderMultiple)}</strong><br>Calculated suggested quantity: <strong>${fmt(p.suggestedQty)} pcs</strong>${state.qtyOverrides.has(p._id)?` • Purchaser override: <strong>${fmt(plannerQty(p))} pcs</strong>`:''}</div></div>
+  <div class="section-block"><div class="section-block-title">Suggested Purchase Calculation</div><div class="formula-box"><strong>${esc(p.condition)} — ${esc(p.action)}</strong><br>${esc(p.reason)}<br><br>Own current cover: <strong>${cover(p.currentCover)} mo</strong> • Effective current cover: <strong>${cover(p.effectiveCurrentCover)} mo</strong> • Effective cover with incoming: <strong>${cover(p.effectiveCover)} mo</strong> • Lead time: <strong>${fmt(p.leadTimeDays)} days</strong><br>Target gap before MOQ/multiple: <strong>${fmt(p.rawSuggestedQty)} pcs</strong> • MOQ: <strong>${fmt(p.moq)}</strong> • Order multiple: <strong>${fmt(p.orderMultiple)}</strong><br>Calculated suggested quantity: <strong>${fmt(p.suggestedQty)} pcs</strong>${state.qtyOverrides.has(p._id)?` • Purchaser override: <strong>${fmt(plannerQty(p))} pcs</strong>`:''}</div>${p.purchaseGroupName?`<div class="note-box group-credit-note"><strong>Purchasing Brand Group: ${esc(p.purchaseGroupName)}</strong><br>Exact same OEM only. Credited stock: <strong>${fmt(p.groupStockCredit)}</strong> • Credited On Way: <strong>${fmt(p.groupOnWayCredit)}</strong> • Credited On Way 2: <strong>${fmt(p.groupOnWay2Credit)}</strong>. Outside-group brands follow the general Other-brand stock credit setting.</div>`:''}</div>
   <div class="section-block"><div class="section-block-title">Exact Same OEM — Other Brands</div><table class="alt-table"><thead><tr><th>Brand</th><th>Brand Part No.</th><th class="num">Stock</th><th class="num">On Way</th><th class="num">On Way 2</th><th class="num">Sales</th></tr></thead><tbody>${altRows}</tbody></table></div>`;
  $('modalBackdrop').classList.remove('hidden');
 }
@@ -421,7 +422,7 @@ function exportRows(rows,name){
     'All Company Qty':p.allCompany,'On Way':p.onWay,'On Way 2':p.onWay2,
     'Sales Qty':p.totalSales,'Sales Count':p.salesCount,'Active Sales Months':`${p.activeMonths}/${p.monthCount}`,'Overall Avg / Mo':+p.avgMonthlySales.toFixed(2),'Recent 3M Avg':+p.recent3Avg.toFixed(2),'Recent 6M Avg':+p.recent6Avg.toFixed(2),'Smart Demand / Mo':+p.demandRate.toFixed(2),'Demand Pattern':p.demandPattern,'Demand Confidence':p.demandConfidence,'Last Sale Date':dateFmt(p.lastSaleDate),'Last Sale Age Months':p.lastSaleAgeMonths===null?'':+p.lastSaleAgeMonths.toFixed(2),'Zero Sales Streak Months':p.zeroSalesStreakMonths,'Inactivity Age Months':p.inactivityAgeMonths===null?'':+p.inactivityAgeMonths.toFixed(2),'Inactivity Basis':p.inactivityBasis,
     'Historical Purchase Qty':p.totalPurchase,'Purchase Count':p.purchaseCount,'Last Purchase Date':dateFmt(p.lastPurchaseDate),'Purchase/Sales Ratio':p.purchaseSalesRatio===Infinity?'INF':+p.purchaseSalesRatio.toFixed(2),'Purchase Signal':p.purchaseSignal,
-    'Same OEM Other Brand Stock':p.otherStock,'Same OEM Other Brand On Way':p.otherOnWay,'Same OEM Other Brand On Way 2':p.otherOnWay2,'Same OEM Detail':p.equivalentNote,
+    'Purchasing Brand Group':p.purchaseGroupName,'Group Credited Stock':p.groupStockCredit,'Group Credited On Way':p.groupOnWayCredit,'Group Credited On Way 2':p.groupOnWay2Credit,'Same OEM Other Brand Stock':p.otherStock,'Same OEM Other Brand On Way':p.otherOnWay,'Same OEM Other Brand On Way 2':p.otherOnWay2,'Same OEM Detail':p.equivalentNote,
     'Current Months Cover':p.currentCover===Infinity?'INF':+p.currentCover.toFixed(2),'Pipeline Months Cover':p.pipelineCover===Infinity?'INF':+p.pipelineCover.toFixed(2),
     'Current Stock-Out Date':stockoutFmt(p.currentStockoutDate,p.demandRate,p.allCompany),'With Incoming Stock-Out Date':stockoutFmt(p.pipelineStockoutDate,p.demandRate,p.directSupply),
     'Brand Lead Time Days':p.leadTimeDays,'Expected New Order Arrival':dateFmt(p.expectedNewOrderArrivalDate),'MOQ Setting':p.moq,'Order Multiple Setting':p.orderMultiple,
@@ -449,6 +450,49 @@ function exportSelectedPurchase(rows,name){
  XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} selected items`);
 }
 
+function groupBrandKey(v){return String(v??'').toUpperCase().replace(/[_\-]+/g,' ').replace(/\s+/g,' ').trim();}
+function groupDraftCopy(groups){return (groups||[]).map((g,i)=>({id:String(g.id||`group_${Date.now()}_${i}`),name:String(g.name||`Brand Group ${i+1}`),enabled:g.enabled!==false,brands:[...(g.brands||[])],stockCreditPct:Number.isFinite(+g.stockCreditPct)?+g.stockCreditPct:100,onWayCreditPct:Number.isFinite(+g.onWayCreditPct)?+g.onWayCreditPct:100,onWay2CreditPct:Number.isFinite(+g.onWay2CreditPct)?+g.onWay2CreditPct:100}));}
+function availableGroupBrands(){
+ const m=new Map();state.products.forEach(p=>{if(p.brand)m.set(groupBrandKey(p.brand),p.brand);});
+ state.brandGroupDrafts.forEach(g=>(g.brands||[]).forEach(k=>{if(!m.has(groupBrandKey(k)))m.set(groupBrandKey(k),k);}));
+ return [...m.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+}
+function groupTriggerLabel(g,brandMap){const n=(g.brands||[]).length;if(!n)return 'Select brands';if(n===1)return brandMap.get(groupBrandKey(g.brands[0]))||g.brands[0];return `${n} selected`;}
+function closeBrandGroupMenus(exceptId=''){document.querySelectorAll('.brand-group-menu').forEach(m=>{if(m.id!==exceptId)m.classList.add('hidden');});}
+function renderBrandGroupsUI(){
+ const root=$('brandGroupsContainer');if(!root)return;
+ const brands=availableGroupBrands(),brandMap=new Map(brands);
+ if(!state.brandGroupDrafts.length){root.innerHTML='<div class="brand-group-empty">No purchasing brand group yet. Click <strong>Add TiBAO Family</strong> for your related brands, or create a custom group.</div>';return;}
+ root.innerHTML=state.brandGroupDrafts.map(g=>{const selected=new Set((g.brands||[]).map(groupBrandKey));return `<div class="brand-group-card" data-group-id="${esc(g.id)}">
+  <div class="brand-group-card-head"><input class="group-name" value="${esc(g.name)}" placeholder="Group name"><label class="group-enabled"><input type="checkbox" class="group-enabled-input" ${g.enabled?'checked':''}> Enabled</label><button type="button" class="btn group-remove">Remove</button></div>
+  <div class="brand-group-grid">
+   <div class="group-field"><label>Brands in group</label><div class="multi-select"><button type="button" class="multi-trigger group-brand-trigger">${esc(groupTriggerLabel(g,brandMap))}</button><div class="multi-menu brand-group-menu hidden" id="brandGroupMenu_${esc(g.id)}"><div class="multi-head"><input class="multi-search group-brand-search" placeholder="Search brands..." autocomplete="off"><div class="multi-actions"><button type="button" data-action="all">Select all</button><button type="button" data-action="clear">Clear</button></div></div><div class="multi-options">${brands.map(([key,name])=>`<label class="multi-option" data-label="${esc(String(name).toLowerCase())}"><input type="checkbox" value="${esc(key)}" ${selected.has(key)?'checked':''}><span>${esc(name)}</span></label>`).join('')}</div></div></div><p>Only exact normalized OEM matches are combined.</p></div>
+   <div class="group-field"><label>Stock credit %</label><input class="group-pct" data-field="stockCreditPct" type="number" min="0" max="100" step="5" value="${g.stockCreditPct}"><p>Current same-OEM stock in grouped brands.</p></div>
+   <div class="group-field"><label>On Way credit %</label><input class="group-pct" data-field="onWayCreditPct" type="number" min="0" max="100" step="5" value="${g.onWayCreditPct}"><p>Already shipped same-OEM stock.</p></div>
+   <div class="group-field"><label>On Way 2 credit %</label><input class="group-pct" data-field="onWay2CreditPct" type="number" min="0" max="100" step="5" value="${g.onWay2CreditPct}"><p>Ordered / supplier preparing.</p></div>
+  </div></div>`;}).join('');
+ root.querySelectorAll('.brand-group-card').forEach(card=>{
+  const id=card.dataset.groupId,g=state.brandGroupDrafts.find(x=>x.id===id);if(!g)return;
+  card.querySelector('.group-name').oninput=e=>g.name=e.target.value;card.querySelector('.group-enabled-input').onchange=e=>g.enabled=e.target.checked;
+  card.querySelectorAll('.group-pct').forEach(inp=>inp.oninput=()=>g[inp.dataset.field]=Math.max(0,Math.min(100,+inp.value||0)));
+  card.querySelector('.group-remove').onclick=()=>{state.brandGroupDrafts=state.brandGroupDrafts.filter(x=>x.id!==id);renderBrandGroupsUI();};
+  const trigger=card.querySelector('.group-brand-trigger'),menu=card.querySelector('.brand-group-menu');
+  trigger.onclick=e=>{e.stopPropagation();closeBrandGroupMenus(menu.id);menu.classList.toggle('hidden');};menu.onclick=e=>e.stopPropagation();
+  const refreshLabel=()=>trigger.textContent=groupTriggerLabel(g,brandMap);
+  menu.querySelectorAll('.multi-option input').forEach(cb=>cb.onchange=()=>{const set=new Set((g.brands||[]).map(groupBrandKey));cb.checked?set.add(groupBrandKey(cb.value)):set.delete(groupBrandKey(cb.value));g.brands=[...set];refreshLabel();});
+  menu.querySelector('[data-action="all"]').onclick=()=>{g.brands=brands.map(x=>x[0]);renderBrandGroupsUI();};menu.querySelector('[data-action="clear"]').onclick=()=>{g.brands=[];renderBrandGroupsUI();};
+  const search=menu.querySelector('.group-brand-search');search.oninput=()=>{const q=search.value.trim().toLowerCase();menu.querySelectorAll('.multi-option').forEach(x=>x.classList.toggle('hidden',q&&!x.dataset.label.includes(q)));};
+ });
+}
+function addBrandGroup(preset=false){
+ const brands=availableGroupBrands();let selected=[];
+ if(preset){const wanted=new Set(['TIBAO','TIBAO HD','TIBAO EXTRA','TG AUTOTEILE','SHOWORLD','SHOWORLD NEW']);selected=brands.filter(([k])=>wanted.has(groupBrandKey(k))).map(([k])=>k);}
+ state.brandGroupDrafts.push({id:`group_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:preset?'TIBAO FAMILY':`Brand Group ${state.brandGroupDrafts.length+1}`,enabled:true,brands:selected,stockCreditPct:100,onWayCreditPct:100,onWay2CreditPct:100});
+ renderBrandGroupsUI();
+ if(preset&&!selected.length)toast('TiBAO Family added — select the brands manually');else if(preset)toast(`TiBAO Family added with ${selected.length} matching brands`);
+}
+function validateBrandGroups(groups){const used=new Map();for(const g of groups){if(!g.enabled)continue;for(const raw of g.brands||[]){const k=groupBrandKey(raw);if(used.has(k))return `Brand ${k} is enabled in both “${used.get(k)}” and “${g.name}”. A brand can belong to only one enabled purchasing group.`;used.set(k,g.name);}}return '';}
+
 function renderBrandRulesUI(){
  const table=$('brandRulesTable');if(!table)return;
  const brandNames=new Map();
@@ -469,7 +513,7 @@ function syncSettingsUI(){
  const s=state.settings;$('sTarget').value=s.targetCover;$('sSafety').value=s.safetyCover;$('sCritical').value=s.criticalCover;$('sReorder').value=s.reorderCover;$('sOverstock').value=s.overstockCover;$('sDormant').value=s.dormantMonths;$('sDead').value=s.deadStockMonths;$('sFast').value=s.fastRate;$('sMedium').value=s.mediumRate;$('sSpike').value=s.spikeDominancePct;$('sRegular').value=s.regularActivePct;$('sEquivalent').value=s.equivalentCreditPct;$('sDemand').value=s.demandMethod;$('sSuggestionMode').value=s.suggestionMode;
  $('sUseLeadTime').value=s.useLeadTime?'on':'off';$('sDefaultLead').value=s.defaultLeadTimeDays;$('sApplyConstraints').value=s.applyOrderConstraints?'on':'off';$('sDefaultMOQ').value=s.defaultMOQ;$('sDefaultMultiple').value=s.defaultOrderMultiple;
  $('sShjShare').value=s.shjSharePct;$('sShjNormalWeeks').value=s.shjNormalCoverWeeks;$('sShjFastWeeks').value=s.shjFastCoverWeeks;$('sShjMLReserve').value=s.shjMotorlineReserveMonths;$('sShjBavaria').value=s.shjUseBavariaBackup?'on':'off';$('sShjMinDemand').value=s.shjMinGroupDemand;
- renderBrandRulesUI();
+ state.brandGroupDrafts=groupDraftCopy(s.brandGroups||[]);renderBrandGroupsUI();renderBrandRulesUI();
 }
 function applySettingsFromUI(){
  state.qtyOverrides.clear();
@@ -486,6 +530,8 @@ function applySettingsFromUI(){
   else rules[key][field]=Math.max(1,+inp.value||1);
  });
  state.settings.brandRules=rules;
+ const groups=groupDraftCopy(state.brandGroupDrafts).map((g,i)=>({id:g.id||`group_${i+1}`,name:(g.name||`Brand Group ${i+1}`).trim(),enabled:g.enabled!==false,brands:Array.from(new Set((g.brands||[]).map(groupBrandKey).filter(Boolean))),stockCreditPct:Math.max(0,Math.min(100,+g.stockCreditPct||0)),onWayCreditPct:Math.max(0,Math.min(100,+g.onWayCreditPct||0)),onWay2CreditPct:Math.max(0,Math.min(100,+g.onWay2CreditPct||0))})).filter(g=>g.brands.length>=2);
+ const groupError=validateBrandGroups(groups);if(groupError){alert(groupError);return;}state.settings.brandGroups=groups;
  saveSettings();recompute();toast('Calculation settings applied');
 }
 
@@ -504,12 +550,12 @@ function toggleMultiMenu(type){
 $('brandFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('brand');};
 $('conditionFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('condition');};
 ['brandFilterMenu','conditionFilterMenu'].forEach(id=>$(id).onclick=e=>e.stopPropagation());
-document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));});
+document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));closeBrandGroupMenus();});
 $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedConditions.clear();['search','descriptionFilter','makeFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).value='');populateFilters();applyFilters();};
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v3_2_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v3_2_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v3_3_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v3_3_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('clearSelection').onclick=()=>{const had=state.selected.size;state.selected.clear();renderPlanner();updateSelectedButton();toast(had?'Selection cleared':'No items were selected');};
 ['shjSearch'].forEach(id=>$(id).addEventListener('input',applyShjFilters));$('shjActionableOnly').addEventListener('change',applyShjFilters);
 function closeShjMultiMenus(){['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));}
@@ -518,11 +564,12 @@ function closeShjMultiMenus(){['shjBrandFilterMenu','shjMakeFilterMenu','shjStat
  $(menuId).onclick=e=>e.stopPropagation();
 });
 $('shjClearFilters').onclick=()=>{state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();$('shjSearch').value='';$('shjActionableOnly').checked=true;populateShjFilters();applyShjFilters();};
-$('shjExportFiltered').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_Filtered_v3_2_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjExportSelected').onclick=()=>exportShjRows(state.shjFiltered.filter(p=>state.shjSelected.has(p._id)),`SHJ_Replenishment_Selected_v3_2_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjClearSelection').onclick=()=>{const had=state.shjSelected.size;state.shjSelected.clear();renderShj();updateShjSelectionButtons();toast(had?'SHJ selection cleared':'No SHJ items were selected');};
+$('shjExportFiltered').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_Filtered_v3_3_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjExportSelected').onclick=()=>exportShjRows(state.shjFiltered.filter(p=>state.shjSelected.has(p._id)),`SHJ_Replenishment_Selected_v3_3_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjClearSelection').onclick=()=>{const had=state.shjSelected.size;state.shjSelected.clear();renderShj();updateShjSelectionButtons();toast(had?'SHJ selection cleared':'No SHJ items were selected');};
 $('shjPageSize').onchange=()=>{state.shjPageSize=+$('shjPageSize').value;state.shjPage=1;renderShj();};$('shjPrevPage').onclick=()=>{if(state.shjPage>1){state.shjPage--;renderShj();}};$('shjNextPage').onclick=()=>{state.shjPage++;renderShj();};
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
-$('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.qtyOverrides.clear();state.shjQtyOverrides.clear();state.shjSelected.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
+$('addBrandGroup').onclick=()=>addBrandGroup(false);$('addTibaoFamily').onclick=()=>addBrandGroup(true);
+$('applySettings').onclick=applySettingsFromUI;$('resetSettings').onclick=()=>{state.settings=normalizeSettings({});state.brandGroupDrafts=[];state.qtyOverrides.clear();state.shjQtyOverrides.clear();state.shjSelected.clear();saveSettings();syncSettingsUI();recompute();toast('Defaults restored');};
 
 populateFilters();renderDashboard();renderPlanner();
 })();
