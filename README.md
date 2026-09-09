@@ -1,11 +1,48 @@
-# TiBAO Purchase Intelligence v3.4
+# TiBAO Purchase Intelligence v3.5
 
-## Fix in V3.4
-- Fixed the Purchasing Brand Groups dropdown being clipped inside the Settings panel.
-- Brand list can now extend outside the card and scroll normally.
-- Search, Select all, Clear and brand checkboxes remain unchanged.
-- Added a proper scroll area and higher stacking level so the dropdown stays above the panels below it.
-- Purchase calculation logic from V3.3 is unchanged.
+## Changes in V3.5
 
-## GitHub update
-Replace index.html, app.js, engine.js and styles.css. Commit, wait for GitHub Pages, then press Ctrl+F5. Confirm **Logic v3.4**.
+### 1) New condition: NO STOCK / NO PURCHASE — REVIEW
+Replaces the old NO DEMAND condition.
+
+Rule:
+- Sales = 0
+- All Company stock = 0
+- On Way = 0
+- On Way 2 = 0
+- Purchase Qty = 0
+- No credited same-OEM supply
+
+Action: REVIEW ITEM / PURCHASE HISTORY.
+
+This avoids assuming an item has no demand when the company never stocked or purchased it during the report period.
+
+### 2) Exact-OEM Purchasing Brand Group duplicate-purchase protection
+For every enabled Purchasing Brand Group, exact normalized OEM families are planned once.
+
+- Combined smart demand is calculated across the group brands for that exact OEM.
+- Existing stock/incoming is credited using the group's Stock / On Way / On Way 2 percentages.
+- One family shortage is calculated.
+- The shortage is allocated to the group's Preferred Purchase Brand when that brand exists for the OEM.
+- Other group rows are automatically set to 0 suggested quantity and marked COVERED BY FAMILY PLAN, preventing duplicate buying.
+- TiBAO Family preset defaults Preferred Purchase Brand to TIBAO when available.
+
+### 3) Optional Brand Order Cycle
+Settings now include:
+- Use brand order cycle: On/Off
+- Default order cycle days
+- Brand-specific Order Cycle Days in Brand Purchasing Rules
+
+When enabled, the planning horizon considers:
+enabled Lead Time + enabled Order Cycle + Safety Cover.
+
+This helps when you buy a supplier only every few weeks/months.
+
+### GitHub update
+Replace:
+- index.html
+- app.js
+- engine.js
+- styles.css
+
+Commit, wait for GitHub Pages, then Ctrl+F5. Confirm **Logic v3.5**.

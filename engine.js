@@ -1,4 +1,4 @@
-/* TiBAO Purchase Intelligence v3.4 - calculation engine
+/* TiBAO Purchase Intelligence v3.5 - calculation engine
  * Pure browser-side logic. No server calls and no data persistence.
  * Purchase history is used as a decision signal / warning, not double-counted as stock.
  */
@@ -14,7 +14,7 @@
 
   const CONDITION_OPTIONS = [
     'CRITICAL ORDER','REORDER SOON','WAIT INCOMING','OK','OVERSTOCK','DORMANT / REVIEW',
-    'DEAD STOCK','ONE-TIME / REVIEW','NO SALES / REVIEW','NO DEMAND'
+    'DEAD STOCK','ONE-TIME / REVIEW','NO SALES / REVIEW','NO STOCK / NO PURCHASE — REVIEW'
   ];
   const MOVEMENT_OPTIONS = ['FAST MOVING','MEDIUM MOVING','SLOW MOVING','NO SALES','DEAD STOCK'];
   const PATTERN_OPTIONS = ['REGULAR','RISING','FALLING','INTERMITTENT','ONE-TIME SPIKE','DORMANT','DEAD STOCK','NO SALES'];
@@ -38,6 +38,8 @@
     regularActivePct: 60,
     useLeadTime: false,
     defaultLeadTimeDays: 45,
+    useOrderCycle: false,
+    defaultOrderCycleDays: 30,
     applyOrderConstraints: false,
     defaultMOQ: 0,
     defaultOrderMultiple: 1,
@@ -100,6 +102,7 @@
     const brands=Array.from(new Set((Array.isArray(g&&g.brands)?g.brands:[]).map(brandGroupKey).filter(Boolean)));
     return {
       id:text(g&&g.id)||`group_${i+1}`, name:text(g&&g.name)||`Brand Group ${i+1}`, enabled:!(g&&g.enabled===false), brands,
+      preferredBrand: brands.includes(brandGroupKey(g&&g.preferredBrand)) ? brandGroupKey(g&&g.preferredBrand) : '',
       stockCreditPct:clampPct(g&&g.stockCreditPct,100), onWayCreditPct:clampPct(g&&g.onWayCreditPct,100), onWay2CreditPct:clampPct(g&&g.onWay2CreditPct,100)
     };
   }
@@ -128,6 +131,7 @@
     const r = brandRule(settings, brand);
     return {
       leadTimeDays: nonNegativeNumber(r.leadTimeDays, nonNegativeNumber(settings.defaultLeadTimeDays, 45)),
+      orderCycleDays: nonNegativeNumber(r.orderCycleDays, nonNegativeNumber(settings.defaultOrderCycleDays, 30)),
       moq: nonNegativeNumber(r.moq, nonNegativeNumber(settings.defaultMOQ, 0)),
       orderMultiple: Math.max(1, nonNegativeNumber(r.orderMultiple, nonNegativeNumber(settings.defaultOrderMultiple, 1)))
     };
@@ -441,11 +445,153 @@
     return families;
   }
 
+
+  function familyPlanAction(condition, groupName, preferredBrand) {
+    const suffix = `${groupName} PURCHASE PLAN${preferredBrand ? ` — BUY ${preferredBrand}` : ''}`;
+    if (condition === 'CRITICAL ORDER') return `ORDER NOW — ${suffix}`;
+    if (condition === 'REORDER SOON') return `ADD TO NEXT PURCHASE — ${suffix}`;
+    if (condition === 'WAIT INCOMING') return `WAIT INCOMING — ${groupName}`;
+    if (condition === 'OVERSTOCK') return `DO NOT ORDER — ${groupName}`;
+    return `NO ACTION — ${groupName}`;
+  }
+
+  function familyDecision(settings, leader, familyDemand, currentSupply, projectedSupply, incomingSupply) {
+    if (!(familyDemand > 0)) return { condition:'OK', priority:4, rawSuggested:0, suggested:0 };
+    const currentCover = currentSupply / familyDemand;
+    const projectedCover = projectedSupply / familyDemand;
+    let condition = 'OK', priority = 4;
+    if (currentCover >= settings.overstockCover) condition = 'OVERSTOCK';
+    else if (projectedCover < settings.criticalCover) condition = 'CRITICAL ORDER';
+    else if (settings.suggestionMode === 'trigger') {
+      if (projectedCover < leader.reorderThreshold) condition = 'REORDER SOON';
+      else if (currentCover < leader.reorderThreshold && incomingSupply > 0) condition = 'WAIT INCOMING';
+      else condition = 'OK';
+    } else {
+      if (currentCover < leader.proactiveThreshold && projectedCover >= leader.proactiveThreshold && incomingSupply > 0) condition = 'WAIT INCOMING';
+      else if (projectedCover < leader.proactiveThreshold) condition = 'REORDER SOON';
+      else condition = 'OK';
+    }
+    if (condition === 'CRITICAL ORDER') priority = 1;
+    else if (condition === 'REORDER SOON') priority = 2;
+    else if (condition === 'WAIT INCOMING') priority = 3;
+    else if (condition === 'OVERSTOCK') priority = 5;
+
+    const targetQty = familyDemand * leader.targetMonths;
+    const rawSuggested = (condition === 'CRITICAL ORDER' || condition === 'REORDER SOON')
+      ? Math.max(0, Math.ceil(targetQty - projectedSupply)) : 0;
+    const suggested = settings.applyOrderConstraints
+      ? applyOrderConstraints(rawSuggested, leader.moq, leader.orderMultiple) : rawSuggested;
+    return { condition, priority, rawSuggested, suggested, targetQty, currentCover, projectedCover };
+  }
+
+  function applyFamilyDuplicateProtection(rows, settings) {
+    if (!Array.isArray(rows) || !rows.length || !(settings.brandGroups||[]).some(g=>g.enabled)) return rows;
+
+    const byOem = new Map();
+    rows.forEach(r => {
+      if (!r.oemKey) return;
+      if (!byOem.has(r.oemKey)) byOem.set(r.oemKey, []);
+      byOem.get(r.oemKey).push(r);
+    });
+
+    for (const group of (settings.brandGroups||[]).filter(g=>g.enabled)) {
+      const groupSet = new Set(group.brands || []);
+      for (const [oemKey, sameOemRows] of byOem.entries()) {
+        const members = sameOemRows.filter(r => groupSet.has(brandGroupKey(r.brand)));
+        const distinctBrands = new Set(members.map(r=>brandGroupKey(r.brand)));
+        if (members.length < 2 || distinctBrands.size < 2) continue;
+
+        const familyDemand = members.reduce((s,r)=>s+Math.max(0,Number(r.demandRate)||0),0);
+        if (!(familyDemand > 0)) continue;
+
+        const preferredKey = group.preferredBrand && groupSet.has(group.preferredBrand) ? group.preferredBrand : '';
+        let leaderCandidates = preferredKey ? members.filter(r=>brandGroupKey(r.brand)===preferredKey) : [];
+        if (!leaderCandidates.length) leaderCandidates = members.slice();
+        leaderCandidates.sort((a,b)=>(b.demandRate-a.demandRate)||(b.totalSales-a.totalSales)||String(a.internalRef||'').localeCompare(String(b.internalRef||'')));
+        const leader = leaderCandidates[0];
+        const leaderKey = brandGroupKey(leader.brand);
+
+        // Use all rows of the selected purchase brand at 100%, grouped alternatives at configured credit,
+        // and outside-group exact-OEM alternatives at the existing global credit.
+        const ownRows = sameOemRows.filter(r=>brandGroupKey(r.brand)===leaderKey);
+        const otherGroupRows = sameOemRows.filter(r=>groupSet.has(brandGroupKey(r.brand)) && brandGroupKey(r.brand)!==leaderKey);
+        const outsideRows = sameOemRows.filter(r=>!groupSet.has(brandGroupKey(r.brand)));
+        const pctStock = group.stockCreditPct/100, pctOnWay = group.onWayCreditPct/100, pctOnWay2 = group.onWay2CreditPct/100;
+        const outsidePct = Math.max(0,Math.min(100,settings.equivalentCreditPct))/100;
+
+        const ownStock = ownRows.reduce((s,r)=>s+r.allCompany,0);
+        const ownOnWay = ownRows.reduce((s,r)=>s+r.onWay,0);
+        const ownOnWay2 = ownRows.reduce((s,r)=>s+r.onWay2,0);
+        const otherStock = otherGroupRows.reduce((s,r)=>s+r.allCompany,0);
+        const otherOnWay = otherGroupRows.reduce((s,r)=>s+r.onWay,0);
+        const otherOnWay2 = otherGroupRows.reduce((s,r)=>s+r.onWay2,0);
+        const outsideStock = outsideRows.reduce((s,r)=>s+r.allCompany,0);
+        const outsideOnWay = outsideRows.reduce((s,r)=>s+r.onWay,0);
+        const outsideOnWay2 = outsideRows.reduce((s,r)=>s+r.onWay2,0);
+
+        const familyCurrentSupply = ownStock + otherStock*pctStock + outsideStock*outsidePct;
+        const familyIncomingSupply = ownOnWay + ownOnWay2 + otherOnWay*pctOnWay + otherOnWay2*pctOnWay2 + (outsideOnWay+outsideOnWay2)*outsidePct;
+        const familyProjectedSupply = familyCurrentSupply + familyIncomingSupply;
+        const decision = familyDecision(settings, leader, familyDemand, familyCurrentSupply, familyProjectedSupply, familyIncomingSupply);
+        const familyPlanId = `${group.id}::${oemKey}`;
+        const familyPlanNote = `${group.name} • ${members.length} rows / ${distinctBrands.size} brands • lead ${leader.brand} • combined demand ${formatNumber(familyDemand,1)}/mo • effective supply ${formatNumber(familyProjectedSupply,0)} • family suggestion ${formatNumber(decision.suggested,0)}`;
+
+        members.forEach(r => {
+          r.preFamilyCondition = r.condition;
+          r.preFamilySuggestedQty = r.suggestedQty;
+          r.preFamilyAction = r.action;
+          r.familyPlanId = familyPlanId;
+          r.familyPlanName = group.name;
+          r.familyPlanPreferredBrand = leader.brand;
+          r.familyPlanLeadId = leader._id;
+          r.familyPlanLead = r._id === leader._id;
+          r.familyPlanMemberCount = members.length;
+          r.familyPlanBrandCount = distinctBrands.size;
+          r.familyCombinedDemand = familyDemand;
+          r.familyCurrentSupply = familyCurrentSupply;
+          r.familyIncomingSupply = familyIncomingSupply;
+          r.familyProjectedSupply = familyProjectedSupply;
+          r.familyCurrentCover = decision.currentCover;
+          r.familyProjectedCover = decision.projectedCover;
+          r.familyTargetQty = decision.targetQty;
+          r.familySuggestedQty = decision.suggested;
+          r.familyPlanCondition = decision.condition;
+          r.familyPlanNote = familyPlanNote;
+        });
+
+        leader.condition = decision.condition;
+        leader.priority = decision.priority;
+        leader.rawSuggestedQty = decision.rawSuggested;
+        leader.suggestedQty = decision.suggested;
+        leader.targetGapQty = decision.rawSuggested;
+        leader.targetQty = decision.targetQty;
+        leader.action = familyPlanAction(decision.condition, group.name, leader.brand);
+        leader.reason += ` • duplicate-protected ${group.name} exact-OEM family • combined demand ${formatNumber(familyDemand,1)}/mo • family effective supply ${formatNumber(familyProjectedSupply,0)} • purchase allocated once to ${leader.brand}`;
+
+        members.forEach(r => {
+          if (r._id === leader._id) return;
+          r.familyPlanSuppressed = true;
+          r.condition = 'OK';
+          r.priority = 4;
+          r.rawSuggestedQty = 0;
+          r.suggestedQty = 0;
+          r.action = decision.suggested > 0
+            ? `COVERED BY ${group.name} PURCHASE PLAN — BUY ${leader.brand}`
+            : (decision.condition === 'WAIT INCOMING'
+              ? `COVERED BY ${group.name} INCOMING`
+              : `COVERED BY ${group.name} SUPPLY`);
+          r.reason += ` • direct purchase suppressed to prevent duplicate exact-OEM buying • family purchase lead ${leader.brand} • pre-family condition ${r.preFamilyCondition} / ${formatNumber(r.preFamilySuggestedQty,0)} pcs`;
+        });
+      }
+    }
+    return rows;
+  }
+
   function calculate(products, settingsInput, reportDate) {
     const settings = cleanSettings(settingsInput);
     const families = buildFamilies(products);
 
-    return products.map(p => {
+    const calculated = products.map(p => {
       const sp = salesProfile(p, settings, reportDate);
       const pp = purchaseProfile(p, reportDate, sp);
       const family = p.oemKey ? (families.get(p.oemKey) || []) : [];
@@ -501,29 +647,38 @@
       const pipelineCover = demand > 0 ? directSupply/demand : (directSupply>0?Infinity:0);
       const effectiveCover = demand > 0 ? effectiveSupply/demand : (effectiveSupply>0?Infinity:0);
 
-      // Brand-aware lead time is optional. When enabled, the reorder horizon cannot be shorter
-      // than the time required to receive a new purchase plus the configured safety buffer.
+      // Brand-aware supplier horizon is optional. Lead time and order cycle can be enabled separately.
+      // When enabled, the reorder horizon cannot be shorter than the enabled supplier days + safety cover.
       const rules = purchaseRules(settings, p.brand);
       const leadTimeMonths = rules.leadTimeDays / 30.4375;
+      const orderCycleMonths = rules.orderCycleDays / 30.4375;
+      const activeLeadDays = settings.useLeadTime ? rules.leadTimeDays : 0;
+      const activeOrderCycleDays = settings.useOrderCycle ? rules.orderCycleDays : 0;
+      const supplierHorizonDays = activeLeadDays + activeOrderCycleDays;
+      const supplierHorizonMonths = supplierHorizonDays / 30.4375;
       const normalTargetMonths = settings.targetCover + settings.safetyCover;
-      const leadTimeRequiredCover = leadTimeMonths + settings.safetyCover;
-      const reorderThreshold = settings.useLeadTime
-        ? Math.max(settings.reorderCover, leadTimeRequiredCover)
+      const leadTimeRequiredCover = leadTimeMonths + settings.safetyCover; // retained for compatibility / display
+      const planningRequiredCover = supplierHorizonMonths + settings.safetyCover;
+      const useSupplierHorizon = settings.useLeadTime || settings.useOrderCycle;
+      const reorderThreshold = useSupplierHorizon
+        ? Math.max(settings.reorderCover, planningRequiredCover)
         : settings.reorderCover;
-      const proactiveThreshold = settings.useLeadTime
-        ? Math.max(settings.targetCover, leadTimeRequiredCover)
+      const proactiveThreshold = useSupplierHorizon
+        ? Math.max(settings.targetCover, planningRequiredCover)
         : settings.targetCover;
-      const targetMonths = settings.useLeadTime
-        ? Math.max(normalTargetMonths, leadTimeRequiredCover)
+      const targetMonths = useSupplierHorizon
+        ? Math.max(normalTargetMonths, planningRequiredCover)
         : normalTargetMonths;
       const targetQty = demand * targetMonths;
       const targetGapQty = Math.max(0, Math.ceil(targetQty - effectiveSupply));
 
-      // Dates are shown even when lead-time logic is disabled because they are useful planning signals.
+      // Dates are shown even when supplier-horizon logic is disabled because they are useful planning signals.
       const currentStockoutDate = projectedStockoutDate(reportDate, p.allCompany, demand);
       const pipelineStockoutDate = projectedStockoutDate(reportDate, directSupply, demand);
       const expectedNewOrderArrivalDate = addDays(reportDate, rules.leadTimeDays);
+      const nextOrderCycleDate = addDays(reportDate, rules.orderCycleDays);
       const leadTimeRisk = settings.useLeadTime && demand > 0 && effectiveCover < leadTimeRequiredCover;
+      const supplierHorizonRisk = useSupplierHorizon && demand > 0 && effectiveCover < planningRequiredCover;
 
       let movement = 'NO SALES';
       if (sp.isDead) movement = 'DEAD STOCK';
@@ -535,7 +690,8 @@
       if (sp.isDead) condition = 'DEAD STOCK';
       else if (sp.isSpike) condition = 'ONE-TIME / REVIEW';
       else if (sp.isDormant) condition = 'DORMANT / REVIEW';
-      else if (sp.total <= 0) condition = p.allCompany > 0 ? 'NO SALES / REVIEW' : 'NO DEMAND';
+      else if (sp.total <= 0 && p.allCompany <= 0 && p.onWay <= 0 && p.onWay2 <= 0 && p.totalPurchase <= 0 && effectiveSupply <= 0) condition = 'NO STOCK / NO PURCHASE — REVIEW';
+      else if (sp.total <= 0) condition = 'NO SALES / REVIEW';
       else if (currentCover >= settings.overstockCover) condition = 'OVERSTOCK';
       else if (demand <= 0) condition = 'NO SALES / REVIEW';
       else if (effectiveCover < settings.criticalCover) condition = 'CRITICAL ORDER';
@@ -562,7 +718,7 @@
       else if (condition === 'DORMANT / REVIEW') { priority=5; action='HOLD / REVIEW DEMAND'; }
       else if (condition === 'ONE-TIME / REVIEW') { priority=5; action='MANUAL REVIEW - POSSIBLE ONE-OFF SALE'; }
       else if (condition === 'NO SALES / REVIEW') { priority=5; action='REVIEW ITEM'; }
-      else if (condition === 'NO DEMAND') { priority=5; action='NO PURCHASE'; }
+      else if (condition === 'NO STOCK / NO PURCHASE — REVIEW') { priority=5; action='REVIEW ITEM / PURCHASE HISTORY'; }
 
       const equivalentNote = purchaseGroup && groupedAlternatives.length
         ? `${purchaseGroup.name}: ${groupedAlternatives.length} group brand${groupedAlternatives.length>1?'s':''} / ${formatNumber(groupStock,0)} stock / ${formatNumber(groupOnWay+groupOnWay2,0)} incoming${outsideAlternatives.length?` • ${outsideAlternatives.length} outside match${outsideAlternatives.length>1?'es':''}`:''}`
@@ -584,7 +740,8 @@
       if (purchaseGroup && groupedAlternatives.length) reasonParts.push(`${purchaseGroup.name} credit: ${formatNumber(groupStockCredit,0)} stock + ${formatNumber(groupIncomingCredit,0)} incoming`);
       if (settings.equivalentCreditPct > 0 && outsideAlternatives.length) reasonParts.push(`${settings.equivalentCreditPct}% outside-group equivalent credit used`);
       if (settings.useLeadTime) reasonParts.push(`brand lead time ${formatNumber(rules.leadTimeDays,0)} days`);
-      if (leadTimeRisk) reasonParts.push('projected supply is short of lead-time + safety cover');
+      if (settings.useOrderCycle) reasonParts.push(`brand order cycle ${formatNumber(rules.orderCycleDays,0)} days`);
+      if (supplierHorizonRisk) reasonParts.push('projected supply is short of enabled supplier horizon + safety cover');
       if (settings.applyOrderConstraints && suggested !== rawSuggestedQty && rawSuggestedQty > 0) {
         reasonParts.push(`MOQ/multiple adjusted ${formatNumber(rawSuggestedQty,0)} → ${formatNumber(suggested,0)}`);
       }
@@ -597,13 +754,16 @@
         purchaseGroupName:purchaseGroup?purchaseGroup.name:'',purchaseGroupBrands:purchaseGroup?purchaseGroup.brands:[],groupedAlternatives,
         groupStock,groupOnWay,groupOnWay2,groupStockCredit,groupOnWayCredit,groupOnWay2Credit,groupIncomingCredit,groupEquivalentCredit,
         outsideStock,outsideOnWay,outsideOnWay2,outsideEquivalentCredit,equivalentStockCredit,equivalentIncomingCredit,
-        currentStockoutDate,pipelineStockoutDate,expectedNewOrderArrivalDate,
-        leadTimeDays:rules.leadTimeDays,leadTimeMonths,leadTimeRequiredCover,reorderThreshold,leadTimeRisk,
+        currentStockoutDate,pipelineStockoutDate,expectedNewOrderArrivalDate,nextOrderCycleDate,
+        leadTimeDays:rules.leadTimeDays,leadTimeMonths,orderCycleDays:rules.orderCycleDays,orderCycleMonths,
+        supplierHorizonDays,supplierHorizonMonths,planningRequiredCover,leadTimeRequiredCover,reorderThreshold,proactiveThreshold,leadTimeRisk,supplierHorizonRisk,targetMonths,
         moq:rules.moq,orderMultiple:rules.orderMultiple,rawSuggestedQty,
         alternatives,otherStock,otherOnWay,otherOnWay2,otherSupply,equivalentCredit,equivalentNote,
         condition,priority,targetQty,targetGapQty,suggestedQty:suggested,action,reason:reasonParts.join(' • ')
       });
     });
+
+    return applyFamilyDuplicateProtection(calculated, settings);
   }
 
   function parseMatrix(matrix) {
