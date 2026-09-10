@@ -1,4 +1,4 @@
-# TiBAO Purchase Intelligence v3.5
+# TiBAO Purchase Intelligence v3.6
 
 ## Changes in V3.5
 
@@ -45,4 +45,11 @@ Replace:
 - engine.js
 - styles.css
 
-Commit, wait for GitHub Pages, then Ctrl+F5. Confirm **Logic v3.5**.
+Commit, wait for GitHub Pages, then Ctrl+F5. Confirm **Logic v3.6**.
+
+
+## v3.6 export update
+
+- Purchase Planner → **Export Selected** now includes **Brand Number / Brand Part No.**
+- SHJ Replenishment exports also use the clear **Brand Number** heading.
+- Brand Number is read from the uploaded Odoo Excel field `Brand Part No.` / `Brand Part Number`.

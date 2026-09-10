@@ -93,7 +93,7 @@ function demoProducts(){
   make(16,'TRUCK-8888','06H103495','TRUCKTEC','PCV VALVE','Engine',6,0,8,[6,7,6,8,7,8,9,7,0,0,0,0],'2026-08-15',60,2,'2026-05-15',20)
  ];
 }
-function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();state.shjQtyOverrides.clear();state.shjPage=1;recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v3.5`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
+function loadDemo(){state.products=demoProducts();state.reportDate=new Date(2026,7,23);state.map={bavariaOnWay:1,tibaoOnWay:1,reportDate:1,groupOnWay:1,groupOnWay2:1,totalPurchase:1,purchaseCount:1,lastPurchaseDate:1};state.fileName='Demo data';state.selected.clear();state.qtyOverrides.clear();state.shjSelected.clear();state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();state.shjQtyOverrides.clear();state.shjPage=1;recompute();$('fileChip').textContent='Demo data';$('reportMeta').textContent=`${state.products.length} demo products • Data as of ${dateFmt(state.reportDate)} • Smart logic v3.6`;showUploadZone(false);$('exportTop').disabled=false;toast('Demo data loaded');}
 
 function recompute(){state.computed=E.calculate(state.products,state.settings,state.reportDate||new Date());state.shjRows=calculateShjRows();populateFilters();populateShjFilters();applyFilters();applyShjFilters();renderDashboard();renderPlanner();renderShj();renderBrands();renderQuality();}
 function uniqueSorted(key){return [...new Set(state.computed.map(x=>x[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));}
@@ -352,7 +352,7 @@ function renderShj(){
 }
 function exportShjRows(rows,name){
  if(!rows.length){toast('Nothing to export');return;}
- const data=rows.map((p,i)=>({'Line no':i+1,'Old Number':p.internalRef,'OEM No Space':p.oemKey||E.normalizeOEM(p.oem),'Add Description':p.description,'Brand No':p.brandPartNo||'','Brand':p.brand,'Suggested From Motorline':shjTransferQty(p),'Motorline Stock':p.motorlineStock,'Bavaria Nearby Stock':p.bavariaStock,'SHJ Stock':p.tibaoStock,'Status':p.shjStatus}));
+ const data=rows.map((p,i)=>({'Line no':i+1,'Old Number':p.internalRef,'OEM No Space':p.oemKey||E.normalizeOEM(p.oem),'Add Description':p.description,'Brand Number':p.brandPartNo||'','Brand':p.brand,'Suggested From Motorline':shjTransferQty(p),'Motorline Stock':p.motorlineStock,'Bavaria Nearby Stock':p.bavariaStock,'SHJ Stock':p.tibaoStock,'Status':p.shjStatus}));
  const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();ws['!cols']=[{wch:9},{wch:28},{wch:22},{wch:48},{wch:20},{wch:18},{wch:24},{wch:18},{wch:22},{wch:14},{wch:24}];XLSX.utils.book_append_sheet(wb,ws,'SHJ Replenishment');XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} SHJ replenishment items`);
 }
 
@@ -443,13 +443,14 @@ function exportSelectedPurchase(rows,name){
   'Old Number':p.internalRef,
   'OEM No Space':p.oemKey||E.normalizeOEM(p.oem),
   'Add Description':p.description,
+  'Brand Number':p.brandPartNo||'',
   'Brand':p.brand,
   'Available Quantity':p.allCompany,
   'Total Incoming Quantity':p.onWay+p.onWay2,
   'Suggested Quantity':plannerQty(p)
  }));
  const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();
- ws['!cols']=[{wch:28},{wch:22},{wch:48},{wch:20},{wch:18},{wch:22},{wch:18}];
+ ws['!cols']=[{wch:28},{wch:22},{wch:48},{wch:22},{wch:20},{wch:18},{wch:22},{wch:18}];
  XLSX.utils.book_append_sheet(wb,ws,'Selected Purchase');
  XLSX.writeFile(wb,name);toast(`Exported ${fmt(rows.length)} selected items`);
 }
@@ -563,7 +564,7 @@ $('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedCondit
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};
-$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v3_5_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v3_5_${dateFmt(state.reportDate||new Date())}.xlsx`);
+$('exportTop').onclick=$('exportFiltered').onclick=()=>exportRows(state.filtered,`Purchase_Suggestions_v3_6_${dateFmt(state.reportDate||new Date())}.xlsx`);$('exportSelected').onclick=()=>exportSelectedPurchase(state.filtered.filter(p=>state.selected.has(p._id)),`Selected_Purchase_Order_v3_6_${dateFmt(state.reportDate||new Date())}.xlsx`);
 $('clearSelection').onclick=()=>{const had=state.selected.size;state.selected.clear();renderPlanner();updateSelectedButton();toast(had?'Selection cleared':'No items were selected');};
 ['shjSearch'].forEach(id=>$(id).addEventListener('input',applyShjFilters));$('shjActionableOnly').addEventListener('change',applyShjFilters);
 function closeShjMultiMenus(){['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));}
@@ -572,7 +573,7 @@ function closeShjMultiMenus(){['shjBrandFilterMenu','shjMakeFilterMenu','shjStat
  $(menuId).onclick=e=>e.stopPropagation();
 });
 $('shjClearFilters').onclick=()=>{state.shjSelectedBrands.clear();state.shjSelectedMakes.clear();state.shjSelectedStatuses.clear();$('shjSearch').value='';$('shjActionableOnly').checked=true;populateShjFilters();applyShjFilters();};
-$('shjExportFiltered').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_Filtered_v3_5_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjExportSelected').onclick=()=>exportShjRows(state.shjFiltered.filter(p=>state.shjSelected.has(p._id)),`SHJ_Replenishment_Selected_v3_5_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjClearSelection').onclick=()=>{const had=state.shjSelected.size;state.shjSelected.clear();renderShj();updateShjSelectionButtons();toast(had?'SHJ selection cleared':'No SHJ items were selected');};
+$('shjExportFiltered').onclick=()=>exportShjRows(state.shjFiltered,`SHJ_Replenishment_Filtered_v3_6_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjExportSelected').onclick=()=>exportShjRows(state.shjFiltered.filter(p=>state.shjSelected.has(p._id)),`SHJ_Replenishment_Selected_v3_6_${dateFmt(state.reportDate||new Date())}.xlsx`);$('shjClearSelection').onclick=()=>{const had=state.shjSelected.size;state.shjSelected.clear();renderShj();updateShjSelectionButtons();toast(had?'SHJ selection cleared':'No SHJ items were selected');};
 $('shjPageSize').onchange=()=>{state.shjPageSize=+$('shjPageSize').value;state.shjPage=1;renderShj();};$('shjPrevPage').onclick=()=>{if(state.shjPage>1){state.shjPage--;renderShj();}};$('shjNextPage').onclick=()=>{state.shjPage++;renderShj();};
 $('modalClose').onclick=()=>$('modalBackdrop').classList.add('hidden');$('modalBackdrop').onclick=e=>{if(e.target===$('modalBackdrop'))$('modalBackdrop').classList.add('hidden');};
 $('brandRuleSearch').oninput=()=>{const q=$('brandRuleSearch').value.trim().toLowerCase();document.querySelectorAll('#brandRulesTable .brand-rule-row').forEach(r=>r.classList.toggle('hidden',q&&!r.dataset.search.includes(q)));};
