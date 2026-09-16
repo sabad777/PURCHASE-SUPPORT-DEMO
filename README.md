@@ -1,4 +1,4 @@
-# TiBAO Purchase Intelligence v3.6
+# TiBAO Purchase Intelligence v3.7
 
 ## Changes in V3.5
 
@@ -45,11 +45,21 @@ Replace:
 - engine.js
 - styles.css
 
-Commit, wait for GitHub Pages, then Ctrl+F5. Confirm **Logic v3.6**.
+Commit, wait for GitHub Pages, then Ctrl+F5. Confirm **Logic v3.7**.
 
 
-## v3.6 export update
+## v3.7 export update
 
 - Purchase Planner → **Export Selected** now includes **Brand Number / Brand Part No.**
 - SHJ Replenishment exports also use the clear **Brand Number** heading.
 - Brand Number is read from the uploaded Odoo Excel field `Brand Part No.` / `Brand Part Number`.
+
+
+## v3.7 — Group 1 filter
+
+- Added a new **Group 1** multi-select filter to Purchase Planner.
+- Group 1 is read dynamically from the uploaded Odoo Excel column named **Group 1**.
+- Existing **Description** search/filter remains unchanged.
+- Multiple Group 1 values can be selected together.
+- The filter works together with Brand, Condition, Make, Movement, Demand Pattern, Category and Description filters.
+- Demo data uses the demo category as Group 1 so the filter is visible before uploading a file.

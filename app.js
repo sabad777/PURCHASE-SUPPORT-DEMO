@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const E=window.PurchaseEngine;
-let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,shjPage:1,shjPageSize:100,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),qtyOverrides:new Map(),shjSelected:new Set(),shjSelectedBrands:new Set(),shjSelectedMakes:new Set(),shjSelectedStatuses:new Set(),shjQtyOverrides:new Map(),activeView:'dashboard',brandGroupDrafts:[]};
+let state={products:[],computed:[],filtered:[],shjRows:[],shjFiltered:[],reportDate:null,fileName:'',map:null,settings:loadSettings(),page:1,pageSize:50,shjPage:1,shjPageSize:100,sortKey:'priority',sortDir:1,selected:new Set(),selectedBrands:new Set(),selectedConditions:new Set(),selectedGroup1:new Set(),qtyOverrides:new Map(),shjSelected:new Set(),shjSelectedBrands:new Set(),shjSelectedMakes:new Set(),shjSelectedStatuses:new Set(),shjQtyOverrides:new Map(),activeView:'dashboard',brandGroupDrafts:[]};
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -68,7 +68,7 @@ async function handleFile(file){
 function demoProducts(){
  const d=new Date(2026,7,23);
  const make=(id,ref,oem,brand,desc,cat,stock,ow,ow2,vals,last,purchase=0,pCount=0,lastPurchase=null,salesCount=null)=>({
-   _id:String(id),productId:String(id),internalRef:ref,oem,oemKey:E.normalizeOEM(oem),brand,brandKey:brand.toUpperCase(),brandPartNo:ref,description:desc,category:cat,
+   _id:String(id),productId:String(id),internalRef:ref,oem,oemKey:E.normalizeOEM(oem),brand,brandKey:brand.toUpperCase(),brandPartNo:ref,description:desc,category:cat,group1:cat,
    motorlineStock:Math.floor(stock*.5),bavariaStock:Math.floor(stock*.2),tibaoStock:stock-Math.floor(stock*.5)-Math.floor(stock*.2),allCompany:stock,tibaoADRef:0,tibaoDXBRef:0,
    monthly:vals,totalSales:vals.slice(0,8).reduce((a,b)=>a+b,0),salesCount:salesCount??Math.max(1,Math.round(vals.slice(0,8).reduce((a,b)=>a+b,0)/3)),lastSaleDate:last?new Date(last):null,
    totalPurchase:purchase,purchaseCount:pCount,lastPurchaseDate:lastPurchase?new Date(lastPurchase):null,
@@ -133,18 +133,40 @@ function populateFilters(){
  fillSelect('movementFilter',E.MOVEMENT_OPTIONS,'All Movement');
  fillSelect('patternFilter',E.PATTERN_OPTIONS,'All Patterns');
  fillSelect('categoryFilter',uniqueSorted('category'),'All Categories');
+ const groups=uniqueSorted('group1');
+ pruneSelection(state.selectedGroup1,groups);
+ renderGroup1Menu(groups);
+}
+function updateGroup1Trigger(values){
+ const trigger=$('group1FilterTrigger'),set=state.selectedGroup1;
+ if(!set.size)trigger.textContent='All Groups';
+ else if(set.size===1)trigger.textContent=[...set][0];
+ else trigger.textContent=`${set.size} selected`;
+ trigger.classList.toggle('has-selection',set.size>0);
+}
+function renderGroup1Menu(values){
+ const menu=$('group1FilterMenu');if(!menu)return;
+ const set=state.selectedGroup1;
+ menu.innerHTML=`<div class="multi-head"><input class="multi-search" type="text" placeholder="Search groups..." autocomplete="off"><div class="multi-actions"><button type="button" data-action="all">Select all</button><button type="button" data-action="clear">Clear</button></div></div><div class="multi-options">${values.map(v=>`<label class="multi-option" data-label="${esc(String(v).toLowerCase())}"><input type="checkbox" value="${esc(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join('')}</div>`;
+ menu.querySelectorAll('.multi-option input').forEach(cb=>cb.onchange=()=>{cb.checked?set.add(cb.value):set.delete(cb.value);updateGroup1Trigger(values);applyFilters();});
+ menu.querySelector('[data-action="all"]').onclick=()=>{values.forEach(v=>set.add(v));renderGroup1Menu(values);updateGroup1Trigger(values);applyFilters();};
+ menu.querySelector('[data-action="clear"]').onclick=()=>{set.clear();renderGroup1Menu(values);updateGroup1Trigger(values);applyFilters();};
+ const search=menu.querySelector('.multi-search');
+ if(search)search.oninput=()=>{const q=search.value.trim().toLowerCase();menu.querySelectorAll('.multi-option').forEach(x=>x.classList.toggle('hidden',q&&!x.dataset.label.includes(q)));};
+ updateGroup1Trigger(values);
 }
 function applyFilters(){
  const q=$('search').value.trim().toLowerCase(),
        desc=$('descriptionFilter').value.trim().toLowerCase(),
        make=$('makeFilter').value,
        mov=$('movementFilter').value,pat=$('patternFilter').value,cat=$('categoryFilter').value;
+ const groups=state.selectedGroup1;
  state.filtered=state.computed.filter(p=>{
   if(state.selectedBrands.size&&!state.selectedBrands.has(p.brand))return false;
   if(state.selectedConditions.size&&!state.selectedConditions.has(p.condition))return false;
-  if(make&&p.make!==make)return false;if(mov&&p.movement!==mov)return false;if(pat&&p.demandPattern!==pat)return false;if(cat&&p.category!==cat)return false;
+  if(make&&p.make!==make)return false;if(mov&&p.movement!==mov)return false;if(pat&&p.demandPattern!==pat)return false;if(cat&&p.category!==cat)return false;if(groups.size&&!groups.has(p.group1))return false;
   if(desc&&!String(p.description||'').toLowerCase().includes(desc))return false;
-  if(q){const hay=[p.internalRef,p.oem,p.brand,p.brandPartNo,p.make,p.category].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+  if(q){const hay=[p.internalRef,p.oem,p.brand,p.brandPartNo,p.make,p.category,p.group1].join(' ').toLowerCase();if(!hay.includes(q))return false;}
   return true;
  });
  // Keep selections strictly inside the current filtered result.
@@ -558,9 +580,10 @@ function toggleMultiMenu(type){
 }
 $('brandFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('brand');};
 $('conditionFilterTrigger').onclick=e=>{e.stopPropagation();toggleMultiMenu('condition');};
-['brandFilterMenu','conditionFilterMenu'].forEach(id=>$(id).onclick=e=>e.stopPropagation());
-document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));closeBrandGroupMenus();});
-$('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedConditions.clear();['search','descriptionFilter','makeFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).value='');populateFilters();applyFilters();};
+$('group1FilterTrigger').onclick=e=>{e.stopPropagation();$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');$('group1FilterMenu').classList.toggle('hidden');};
+['brandFilterMenu','conditionFilterMenu','group1FilterMenu'].forEach(id=>$(id).onclick=e=>e.stopPropagation());
+document.addEventListener('click',()=>{$('brandFilterMenu').classList.add('hidden');$('conditionFilterMenu').classList.add('hidden');$('group1FilterMenu').classList.add('hidden');['shjBrandFilterMenu','shjMakeFilterMenu','shjStatusFilterMenu'].forEach(id=>$(id).classList.add('hidden'));closeBrandGroupMenus();});
+$('clearFilters').onclick=()=>{state.selectedBrands.clear();state.selectedConditions.clear();state.selectedGroup1.clear();['search','descriptionFilter','makeFilter','movementFilter','patternFilter','categoryFilter'].forEach(id=>$(id).value='');populateFilters();applyFilters();};
 document.querySelectorAll('.kpi[data-condition]').forEach(k=>k.onclick=()=>{state.selectedConditions.clear();state.selectedConditions.add(k.dataset.condition);renderMultiMenu('condition',E.CONDITION_OPTIONS);applyFilters();});
 document.querySelectorAll('.kpi[data-movement]').forEach(k=>k.onclick=()=>{$('movementFilter').value=k.dataset.movement;applyFilters();});
 $('pageSize').onchange=()=>{state.pageSize=+$('pageSize').value;state.page=1;renderPlanner();};$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderPlanner();}};$('nextPage').onclick=()=>{state.page++;renderPlanner();};

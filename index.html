@@ -10,7 +10,7 @@
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v3.6</div></div></div>
+    <div class="brandmark"><div class="brand-badge">TP</div><div><div class="brand-title">Purchase Intelligence</div><div class="brand-sub">Professional prototype v3.7</div></div></div>
     <nav class="nav">
       <button class="active" data-view="dashboard"><span class="icon">▦</span><span class="label">Dashboard</span></button>
       <button data-view="planner"><span class="icon">☷</span><span class="label">Purchase Planner</span></button>
@@ -26,7 +26,7 @@
   <main class="main">
     <header class="topbar">
       <div><div class="page-title" id="pageTitle">Purchase Support</div><div class="page-subtitle" id="reportMeta">Upload an Odoo Purchase Support Excel export</div></div>
-      <div class="top-actions"><span class="version-chip">Logic v3.6</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
+      <div class="top-actions"><span class="version-chip">Logic v3.7</span><span class="file-chip" id="fileChip">No file loaded</span><button class="btn soft" id="uploadTop">Upload Excel</button><button class="btn primary" id="exportTop" disabled>Export Suggestions</button></div>
     </header>
 
     <div class="content">
@@ -63,6 +63,13 @@
           <div class="field"><label>Movement</label><select id="movementFilter"><option value="">All Movement</option></select></div>
           <div class="field"><label>Demand Pattern</label><select id="patternFilter"><option value="">All Patterns</option></select></div>
           <div class="field"><label>Category</label><select id="categoryFilter"><option value="">All Categories</option></select></div>
+          <div class="field">
+            <label>Group 1</label>
+            <div class="multi-select" id="group1Multi">
+              <button type="button" class="multi-trigger" id="group1FilterTrigger">All Groups</button>
+              <div class="multi-menu hidden" id="group1FilterMenu"></div>
+            </div>
+          </div>
           <div class="field"><label>&nbsp;</label><button class="btn" id="clearFilters">Clear</button></div>
         </div>
 
@@ -76,7 +83,7 @@
         </div>
 
         <div class="grid-2">
-          <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Make / Description / Category filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Purchase Health</div><div class="panel-note">Counts change with your Brand / Condition / Make / Description / Category / Group 1 filters</div></div></div><div class="panel-body"><div class="status-bars" id="statusBars"></div></div></div>
           <div class="panel"><div class="panel-head"><div class="panel-title">Decision Intelligence v3.6</div></div><div class="panel-body"><div class="insights">
             <div class="insight"><div class="dot">▥</div><div><strong>Month-by-month demand pattern</strong><span>Checks active sales months, recent 3/6 months, rising/falling trend and one-time spikes.</span></div></div>
             <div class="insight"><div class="dot">🧾</div><div><strong>Purchase history is checked</strong><span>Purchase Qty, Purchase Count and Last Purchase are shown as decision signals without double-counting stock.</span></div></div>
